@@ -31,7 +31,15 @@ except ImportError:
 
 try:
     # noinspection PyUnresolvedReferences
-    from pandas.core.window import EWM
+    # 尝试多种可能的EWM导入路径，兼容不同pandas版本
+    try:
+        from pandas.core.window import EWM
+    except ImportError:
+        # pandas 1.0+可能使用这个路径
+        from pandas.core.window.ewm import EWM
+    except ImportError:
+        # pandas 2.0+可能使用这个路径
+        from pandas import EWM
     g_pandas_has_ewm = True
 except ImportError:
     g_pandas_has_ewm = False
@@ -135,15 +143,45 @@ def _pd_ewm(pd_object, pd_object_cm, how, *args, **kwargs):
     :param how: 代表方法操作名称，eg. mean, std, var
     :return:
     """
-    if g_pandas_has_ewm:
+    try:
         """pandas版本高，使用如pd_object.ewm直接调用"""
         ewm_obj = pd_object.ewm(*args, **kwargs)
-        if hasattr(ewm_obj, how):
+        # 直接使用ewm_obj的方法，不再通过getattr动态获取，确保兼容性
+        if how == 'mean':
             if pd_object_cm is None:
-                return getattr(ewm_obj, how)()
-            # 需要两个pd_object进行的操作
-            return getattr(ewm_obj, how)(pd_object_cm)
-    else:
+                return ewm_obj.mean()
+            else:
+                return ewm_obj.mean(pd_object_cm)
+        elif how == 'std':
+            if pd_object_cm is None:
+                return ewm_obj.std()
+            else:
+                return ewm_obj.std(pd_object_cm)
+        elif how == 'var':
+            if pd_object_cm is None:
+                return ewm_obj.var()
+            else:
+                return ewm_obj.var(pd_object_cm)
+        elif how == 'corr':
+            if pd_object_cm is None:
+                return ewm_obj.corr()
+            else:
+                return ewm_obj.corr(pd_object_cm)
+        elif how == 'cov':
+            if pd_object_cm is None:
+                return ewm_obj.cov()
+            else:
+                return ewm_obj.cov(pd_object_cm)
+        else:
+            # 对于其他方法，仍然尝试使用getattr
+            if hasattr(ewm_obj, how):
+                if pd_object_cm is None:
+                    return getattr(ewm_obj, how)()
+                else:
+                    return getattr(ewm_obj, how)(pd_object_cm)
+    except Exception as e:
+        print(f"Warning: EWM direct method call failed: {e}")
+        print(f"Trying legacy pandas EWM method...")
         """pandas版本低，使用如pd.ewmstd方法调用"""
         if how == 'mean':
             # pd.ewma特殊代表加权移动平均，所以使用a替换mean

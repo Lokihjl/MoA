@@ -10,3 +10,7 @@ from . import stock
 from . import strategy
 from . import data
 from . import alpha_strategy
+from . import gap
+from . import trend_speed
+from . import golden_section
+from . import price_change

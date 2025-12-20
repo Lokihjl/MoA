@@ -1138,7 +1138,6 @@ table {
 
 th, td {
   padding: 0.75rem;
-  text-align: left;
   border-bottom: 1px solid #eee;
 }
 
@@ -1148,6 +1147,12 @@ th {
   color: #555;
   cursor: pointer;
   position: relative;
+  text-align: right;
+}
+
+/* 日期列标题左对齐 */
+th:first-child {
+  text-align: left;
 }
 
 th.sortable {
@@ -1156,6 +1161,16 @@ th.sortable {
 
 th.sortable:hover {
   background-color: #e9ecef;
+}
+
+td {
+  color: #333;
+  text-align: right;
+}
+
+/* 日期列数据左对齐 */
+td:first-child {
+  text-align: left;
 }
 
 .sort-indicator {

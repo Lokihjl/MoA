@@ -5,6 +5,17 @@ import os
 # 将项目根目录添加到Python路径中，以便导入abupy模块
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
+# 初始化ABU框架配置
+from abupy.CoreBu import ABuEnv
+from abupy.CoreBu.ABuEnv import EMarketSourceType, EMarketDataFetchMode
+
+# 设置数据源为腾讯财经
+ABuEnv.g_market_source = EMarketSourceType.E_MARKET_SOURCE_tx
+# 设置数据获取模式为正常模式（先本地，后网络）
+ABuEnv.g_data_fetch_mode = EMarketDataFetchMode.E_DATA_FETCH_NORMAL
+# 设置不使用HDF5缓存，使用CSV缓存
+ABuEnv.g_data_cache_type = ABuEnv.EDataCacheType.E_DATA_CACHE_CSV
+
 from flask import Flask, jsonify
 from config.config import DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS, DEBUG, PORT
 from models import db

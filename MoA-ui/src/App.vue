@@ -69,30 +69,89 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  font-family: Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   width: 100%;
   box-sizing: border-box;
+  background-color: var(--bg-secondary);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* 添加背景装饰元素 */
+.app-container::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  right: -10%;
+  width: 400px;
+  height: 400px;
+  background: var(--gradient-primary);
+  opacity: 0.05;
+  border-radius: 50%;
+  animation: float 6s ease-in-out infinite alternate;
+  z-index: -1;
+}
+
+.app-container::after {
+  content: '';
+  position: fixed;
+  bottom: -30%;
+  left: -15%;
+  width: 500px;
+  height: 500px;
+  background: var(--gradient-secondary);
+  opacity: 0.05;
+  border-radius: 50%;
+  animation: float 8s ease-in-out infinite alternate-reverse;
+  z-index: -1;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-20px) rotate(10deg);
+  }
 }
 
 .app-header {
-  background-color: #2c3e50;
+  background: var(--gradient-primary);
   color: white;
-  padding: 1rem;
+  padding: 1.5rem;
   text-align: center;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
 }
 
+.app-header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: fadeInDown 0.8s ease-out;
+}
+
+/* 导航栏样式 */
 .app-nav {
-  background-color: #34495e;
-  padding: 0.5rem;
+  background-color: white;
+  padding: 0.75rem;
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  animation: fadeInDown 0.8s ease-out 0.2s both;
 }
 
 .app-nav ul {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin: 0;
   padding: 0;
+  justify-content: center;
 }
 
 .app-nav li {
@@ -100,34 +159,118 @@
 }
 
 .app-nav a {
-  color: white;
+  color: var(--text-secondary);
   text-decoration: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  transition: background-color 0.3s;
+  padding: 0.6rem 1.2rem;
+  border-radius: 20px;
+  transition: all var(--transition-normal);
+  font-weight: 500;
+  font-size: 0.95rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.app-nav a::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--gradient-primary);
+  transition: width var(--transition-normal);
 }
 
 .app-nav a:hover {
-  background-color: #3498db;
+  color: var(--primary-color);
+  background-color: var(--bg-tertiary);
+  transform: translateY(-2px);
+}
+
+.app-nav a:hover::before {
+  width: 100%;
 }
 
 .app-nav a.router-link-active {
-  background-color: #2980b9;
+  color: var(--primary-color);
+  background-color: var(--bg-tertiary);
+  font-weight: 600;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
+.app-nav a.router-link-active::before {
+  width: 100%;
+}
+
+/* 主内容区域 */
 .app-main {
   flex: 1;
-  padding: 1rem;
-  background-color: #ecf0f1;
+  padding: 2rem;
   width: 100%;
   box-sizing: border-box;
+  max-width: 1400px;
+  margin: 0 auto;
+  animation: fadeInUp 0.8s ease-out 0.4s both;
 }
 
+/* 页脚样式 */
 .app-footer {
-  background-color: #2c3e50;
+  background: var(--gradient-primary);
   color: white;
-  padding: 1rem;
+  padding: 2rem;
   text-align: center;
   margin-top: auto;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  animation: fadeInUp 0.8s ease-out 0.6s both;
+}
+
+.app-footer p {
+  margin: 0;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .app-header h1 {
+    font-size: 2rem;
+  }
+  
+  .app-nav ul {
+    gap: 0.5rem;
+  }
+  
+  .app-nav a {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+  }
+  
+  .app-main {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    padding: 1rem;
+  }
+  
+  .app-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .app-nav {
+    padding: 0.5rem;
+  }
+  
+  .app-nav ul {
+    gap: 0.25rem;
+  }
+  
+  .app-nav a {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+  }
 }
 </style>

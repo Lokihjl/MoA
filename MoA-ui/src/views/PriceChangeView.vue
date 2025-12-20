@@ -1,6 +1,6 @@
 <template>
-  <div class="golden-section-container">
-    <h2>黄金分割分析</h2>
+  <div class="price-change-container">
+    <h2>涨跌幅分析</h2>
     
     <div class="tabs">
       <button 
@@ -14,9 +14,9 @@
     </div>
     
     <div class="tab-content">
-      <!-- 单个股票黄金分割 -->
+      <!-- 单个股票涨跌幅 -->
       <div v-if="activeTab === 'single'" class="tab-pane">
-        <h3>单个股票黄金分割分析</h3>
+        <h3>单个股票涨跌幅分析</h3>
         <div class="form-section">
           <div class="form-grid">
             <div class="form-group">
@@ -72,17 +72,6 @@
               </div>
             </div>
             <div class="form-group">
-              <label for="single-resample">重采样周期</label>
-              <input 
-                type="number" 
-                id="single-resample" 
-                v-model.number="singleParams.resample"
-                min="1" 
-                max="30"
-                step="1"
-              />
-            </div>
-            <div class="form-group">
               <label for="single-period">时间周期</label>
               <select id="single-period" v-model="singleParams.period">
                 <option value="1d">日K</option>
@@ -94,10 +83,10 @@
           <div class="buttons-group">
             <button 
               class="btn-primary" 
-              @click="getSingleGoldenSection" 
+              @click="getSinglePriceChange" 
               :disabled="isLoading"
             >
-              {{ isLoading ? '计算中...' : '分析黄金分割' }}
+              {{ isLoading ? '计算中...' : '分析涨跌幅' }}
             </button>
           </div>
         </div>
@@ -110,99 +99,76 @@
               <span class="value">{{ singleResult.symbol }}</span>
             </div>
             <div class="result-item">
-              <span class="label">重采样周期：</span>
-              <span class="value">{{ singleResult.resample }}天</span>
-            </div>
-            <div class="result-item">
               <span class="label">时间周期：</span>
               <span class="value">{{ periodLabelMap[singleResult.period] }}</span>
             </div>
+            <div class="result-item">
+              <span class="label">最新价格：</span>
+              <span class="value">{{ singleResult.latest_price.toFixed(2) }}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">起始价格：</span>
+              <span class="value">{{ singleResult.start_price.toFixed(2) }}</span>
+            </div>
             
-            <!-- 核心黄金比例 -->
+            <!-- 统计信息 -->
             <div class="result-subsection">
-              <h5>核心黄金比例</h5>
+              <h5>统计信息</h5>
               <div class="result-grid">
                 <div class="result-item">
-                  <span class="label">0.382：</span>
-                  <span class="value">{{ singleResult.g382.toFixed(2) }}</span>
+                  <span class="label">总交易天数：</span>
+                  <span class="value">{{ singleResult.stats.total_days }}</span>
+                </div>
+                <div class="result-item highlight">
+                  <span class="label">总收益率：</span>
+                  <span class="value">{{ singleResult.stats.total_return.toFixed(2) }}%</span>
                 </div>
                 <div class="result-item">
-                  <span class="label">0.500：</span>
-                  <span class="value">{{ singleResult.g500.toFixed(2) }}</span>
+                  <span class="label">平均涨跌幅：</span>
+                  <span class="value">{{ singleResult.stats.avg_change.toFixed(2) }}%</span>
                 </div>
                 <div class="result-item">
-                  <span class="label">0.618：</span>
-                  <span class="value">{{ singleResult.g618.toFixed(2) }}</span>
+                  <span class="label">最大涨幅：</span>
+                  <span class="value">{{ singleResult.stats.max_change.toFixed(2) }}%</span>
                 </div>
                 <div class="result-item">
-                  <span class="label">扩展0.382：</span>
-                  <span class="value">{{ singleResult.gex382.toFixed(2) }}</span>
+                  <span class="label">最大跌幅：</span>
+                  <span class="value">{{ singleResult.stats.min_change.toFixed(2) }}%</span>
                 </div>
                 <div class="result-item">
-                  <span class="label">扩展0.500：</span>
-                  <span class="value">{{ singleResult.gex500.toFixed(2) }}</span>
+                  <span class="label">上涨天数：</span>
+                  <span class="value">{{ singleResult.stats.positive_days }}</span>
                 </div>
                 <div class="result-item">
-                  <span class="label">扩展0.618：</span>
-                  <span class="value">{{ singleResult.gex618.toFixed(2) }}</span>
+                  <span class="label">下跌天数：</span>
+                  <span class="value">{{ singleResult.stats.negative_days }}</span>
+                </div>
+                <div class="result-item">
+                  <span class="label">平盘天数：</span>
+                  <span class="value">{{ singleResult.stats.zero_days }}</span>
                 </div>
               </div>
             </div>
             
-            <!-- 扩展黄金比例带 -->
+            <!-- 最近N天涨跌幅 -->
             <div class="result-subsection">
-              <h5>扩展黄金比例带</h5>
-              <div class="result-grid">
-                <div class="result-item highlight">
-                  <span class="label">618上边界：</span>
-                  <span class="value">{{ singleResult.above618.toFixed(2) }}</span>
-                </div>
-                <div class="result-item highlight">
-                  <span class="label">618下边界：</span>
-                  <span class="value">{{ singleResult.below618.toFixed(2) }}</span>
-                </div>
-                <div class="result-item highlight">
-                  <span class="label">382上边界：</span>
-                  <span class="value">{{ singleResult.above382.toFixed(2) }}</span>
-                </div>
-                <div class="result-item highlight">
-                  <span class="label">382下边界：</span>
-                  <span class="value">{{ singleResult.below382.toFixed(2) }}</span>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 百分比关键点 -->
-            <div class="result-subsection">
-              <h5>百分比关键点</h5>
+              <h5>最近N天涨跌幅</h5>
               <div class="result-grid">
                 <div class="result-item">
-                  <span class="label">95%：</span>
-                  <span class="value">{{ singleResult.above950.toFixed(2) }}</span>
+                  <span class="label">5天：</span>
+                  <span class="value">{{ singleResult.recent_days['5_days'].toFixed(2) }}%</span>
                 </div>
                 <div class="result-item">
-                  <span class="label">90%：</span>
-                  <span class="value">{{ singleResult.above900.toFixed(2) }}</span>
+                  <span class="label">10天：</span>
+                  <span class="value">{{ singleResult.recent_days['10_days'].toFixed(2) }}%</span>
                 </div>
                 <div class="result-item">
-                  <span class="label">80%：</span>
-                  <span class="value">{{ singleResult.above800.toFixed(2) }}</span>
+                  <span class="label">30天：</span>
+                  <span class="value">{{ singleResult.recent_days['30_days'].toFixed(2) }}%</span>
                 </div>
                 <div class="result-item">
-                  <span class="label">70%：</span>
-                  <span class="value">{{ singleResult.above700.toFixed(2) }}</span>
-                </div>
-                <div class="result-item">
-                  <span class="label">30%：</span>
-                  <span class="value">{{ singleResult.below300.toFixed(2) }}</span>
-                </div>
-                <div class="result-item">
-                  <span class="label">25%：</span>
-                  <span class="value">{{ singleResult.below250.toFixed(2) }}</span>
-                </div>
-                <div class="result-item">
-                  <span class="label">20%：</span>
-                  <span class="value">{{ singleResult.below200.toFixed(2) }}</span>
+                  <span class="label">60天：</span>
+                  <span class="value">{{ singleResult.recent_days['60_days'].toFixed(2) }}%</span>
                 </div>
               </div>
             </div>
@@ -210,9 +176,9 @@
         </div>
       </div>
       
-      <!-- 两只股票黄金分割对比 -->
+      <!-- 两只股票涨跌幅对比 -->
       <div v-else-if="activeTab === 'pair'" class="tab-pane">
-        <h3>两只股票黄金分割对比</h3>
+        <h3>两只股票涨跌幅对比</h3>
         <div class="form-section">
           <div class="form-grid">
             <div class="form-group">
@@ -320,17 +286,6 @@
               </div>
             </div>
             <div class="form-group">
-              <label for="pair-resample">重采样周期</label>
-              <input 
-                type="number" 
-                id="pair-resample" 
-                v-model.number="pairParams.resample"
-                min="1" 
-                max="30"
-                step="1"
-              />
-            </div>
-            <div class="form-group">
               <label for="pair-period">时间周期</label>
               <select id="pair-period" v-model="pairParams.period">
                 <option value="1d">日K</option>
@@ -342,7 +297,7 @@
           <div class="buttons-group">
             <button 
               class="btn-primary" 
-              @click="getPairGoldenSection" 
+              @click="getPairPriceChange" 
               :disabled="isLoading"
             >
               {{ isLoading ? '计算中...' : '计算对比分析' }}
@@ -353,80 +308,102 @@
         <div v-if="pairResult" class="result-section">
           <h4>对比结果</h4>
           <div class="result-item">
-            <span class="label">重采样周期：</span>
-            <span class="value">{{ pairResult.resample }}天</span>
-          </div>
-          <div class="result-item">
             <span class="label">时间周期：</span>
             <span class="value">{{ periodLabelMap[pairResult.period] }}</span>
           </div>
           <div class="result-cards">
             <div class="result-card">
               <h5>{{ pairResult.symbol }}</h5>
-              <!-- 核心黄金比例 -->
+              <!-- 基本信息 -->
+              <div class="result-item">
+                <span class="label">最新价格：</span>
+                <span class="value">{{ pairResult.symbol_change.latest_price.toFixed(2) }}</span>
+              </div>
+              <!-- 核心统计信息 -->
               <div class="result-subsection">
-                <h6>核心黄金比例</h6>
+                <h6>核心统计</h6>
                 <div class="result-grid">
-                  <div class="result-item">
-                    <span class="label">0.382：</span>
-                    <span class="value">{{ pairResult.symbol_golden.g382.toFixed(2) }}</span>
+                  <div class="result-item highlight">
+                    <span class="label">总收益率：</span>
+                    <span class="value">{{ pairResult.symbol_change.stats.total_return.toFixed(2) }}%</span>
                   </div>
                   <div class="result-item">
-                    <span class="label">0.500：</span>
-                    <span class="value">{{ pairResult.symbol_golden.g500.toFixed(2) }}</span>
+                    <span class="label">平均涨跌幅：</span>
+                    <span class="value">{{ pairResult.symbol_change.stats.avg_change.toFixed(2) }}%</span>
                   </div>
                   <div class="result-item">
-                    <span class="label">0.618：</span>
-                    <span class="value">{{ pairResult.symbol_golden.g618.toFixed(2) }}</span>
+                    <span class="label">最大涨幅：</span>
+                    <span class="value">{{ pairResult.symbol_change.stats.max_change.toFixed(2) }}%</span>
+                  </div>
+                  <div class="result-item">
+                    <span class="label">最大跌幅：</span>
+                    <span class="value">{{ pairResult.symbol_change.stats.min_change.toFixed(2) }}%</span>
                   </div>
                 </div>
               </div>
-              <!-- 扩展黄金比例带 -->
+              <!-- 最近N天涨跌幅 -->
               <div class="result-subsection">
-                <h6>扩展黄金比例带</h6>
+                <h6>最近涨跌幅</h6>
                 <div class="result-grid">
-                  <div class="result-item highlight">
-                    <span class="label">618上边界：</span>
-                    <span class="value">{{ pairResult.symbol_golden.above618.toFixed(2) }}</span>
+                  <div class="result-item">
+                    <span class="label">5天：</span>
+                    <span class="value">{{ pairResult.symbol_change.recent_days['5_days'].toFixed(2) }}%</span>
                   </div>
-                  <div class="result-item highlight">
-                    <span class="label">618下边界：</span>
-                    <span class="value">{{ pairResult.symbol_golden.below618.toFixed(2) }}</span>
+                  <div class="result-item">
+                    <span class="label">30天：</span>
+                    <span class="value">{{ pairResult.symbol_change.recent_days['30_days'].toFixed(2) }}%</span>
+                  </div>
+                  <div class="result-item">
+                    <span class="label">60天：</span>
+                    <span class="value">{{ pairResult.symbol_change.recent_days['60_days'].toFixed(2) }}%</span>
                   </div>
                 </div>
               </div>
             </div>
             <div class="result-card">
               <h5>{{ pairResult.benchmark_symbol }}</h5>
-              <!-- 核心黄金比例 -->
+              <!-- 基本信息 -->
+              <div class="result-item">
+                <span class="label">最新价格：</span>
+                <span class="value">{{ pairResult.benchmark_change.latest_price.toFixed(2) }}</span>
+              </div>
+              <!-- 核心统计信息 -->
               <div class="result-subsection">
-                <h6>核心黄金比例</h6>
+                <h6>核心统计</h6>
                 <div class="result-grid">
-                  <div class="result-item">
-                    <span class="label">0.382：</span>
-                    <span class="value">{{ pairResult.benchmark_golden.g382.toFixed(2) }}</span>
+                  <div class="result-item highlight">
+                    <span class="label">总收益率：</span>
+                    <span class="value">{{ pairResult.benchmark_change.stats.total_return.toFixed(2) }}%</span>
                   </div>
                   <div class="result-item">
-                    <span class="label">0.500：</span>
-                    <span class="value">{{ pairResult.benchmark_golden.g500.toFixed(2) }}</span>
+                    <span class="label">平均涨跌幅：</span>
+                    <span class="value">{{ pairResult.benchmark_change.stats.avg_change.toFixed(2) }}%</span>
                   </div>
                   <div class="result-item">
-                    <span class="label">0.618：</span>
-                    <span class="value">{{ pairResult.benchmark_golden.g618.toFixed(2) }}</span>
+                    <span class="label">最大涨幅：</span>
+                    <span class="value">{{ pairResult.benchmark_change.stats.max_change.toFixed(2) }}%</span>
+                  </div>
+                  <div class="result-item">
+                    <span class="label">最大跌幅：</span>
+                    <span class="value">{{ pairResult.benchmark_change.stats.min_change.toFixed(2) }}%</span>
                   </div>
                 </div>
               </div>
-              <!-- 扩展黄金比例带 -->
+              <!-- 最近N天涨跌幅 -->
               <div class="result-subsection">
-                <h6>扩展黄金比例带</h6>
+                <h6>最近涨跌幅</h6>
                 <div class="result-grid">
-                  <div class="result-item highlight">
-                    <span class="label">618上边界：</span>
-                    <span class="value">{{ pairResult.benchmark_golden.above618.toFixed(2) }}</span>
+                  <div class="result-item">
+                    <span class="label">5天：</span>
+                    <span class="value">{{ pairResult.benchmark_change.recent_days['5_days'].toFixed(2) }}%</span>
                   </div>
-                  <div class="result-item highlight">
-                    <span class="label">618下边界：</span>
-                    <span class="value">{{ pairResult.benchmark_golden.below618.toFixed(2) }}</span>
+                  <div class="result-item">
+                    <span class="label">30天：</span>
+                    <span class="value">{{ pairResult.benchmark_change.recent_days['30_days'].toFixed(2) }}%</span>
+                  </div>
+                  <div class="result-item">
+                    <span class="label">60天：</span>
+                    <span class="value">{{ pairResult.benchmark_change.recent_days['60_days'].toFixed(2) }}%</span>
                   </div>
                 </div>
               </div>
@@ -435,9 +412,9 @@
         </div>
       </div>
       
-      <!-- 多只股票黄金分割对比 -->
+      <!-- 多只股票涨跌幅对比 -->
       <div v-else-if="activeTab === 'multi'" class="tab-pane">
-        <h3>多只股票黄金分割对比</h3>
+        <h3>多只股票涨跌幅对比</h3>
         <div class="form-section">
           <div class="form-grid">
             <div class="form-group full-width">
@@ -448,17 +425,6 @@
                 placeholder="例如：sh600000,sh600036,sz000001,sz000858"
                 rows="3"
               ></textarea>
-            </div>
-            <div class="form-group">
-              <label for="multi-resample">重采样周期</label>
-              <input 
-                type="number" 
-                id="multi-resample" 
-                v-model.number="multiParams.resample"
-                min="1" 
-                max="30"
-                step="1"
-              />
             </div>
             <div class="form-group">
               <label for="multi-period">时间周期</label>
@@ -472,7 +438,7 @@
           <div class="buttons-group">
             <button 
               class="btn-primary" 
-              @click="getMultiGoldenSection" 
+              @click="getMultiPriceChange" 
               :disabled="isLoading"
             >
               {{ isLoading ? '计算中...' : '计算多股分析' }}
@@ -483,10 +449,6 @@
         <div v-if="multiResult" class="result-section">
           <h4>对比结果</h4>
           <div class="result-item">
-            <span class="label">重采样周期：</span>
-            <span class="value">{{ multiResult.resample }}天</span>
-          </div>
-          <div class="result-item">
             <span class="label">时间周期：</span>
             <span class="value">{{ periodLabelMap[multiResult.period] }}</span>
           </div>
@@ -495,25 +457,27 @@
               <thead>
                 <tr>
                   <th>股票代码</th>
-                  <th>核心0.382</th>
-                  <th>核心0.500</th>
-                  <th>核心0.618</th>
-                  <th>618上边界</th>
-                  <th>618下边界</th>
-                  <th>382上边界</th>
-                  <th>382下边界</th>
+                  <th>最新价格</th>
+                  <th>总收益率</th>
+                  <th>平均涨跌幅</th>
+                  <th>最大涨幅</th>
+                  <th>最大跌幅</th>
+                  <th>5天涨跌幅</th>
+                  <th>30天涨跌幅</th>
+                  <th>60天涨跌幅</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="item in multiResult.results" :key="item.symbol">
                   <td>{{ item.symbol }}</td>
-                  <td>{{ item.g382.toFixed(2) }}</td>
-                  <td>{{ item.g500.toFixed(2) }}</td>
-                  <td>{{ item.g618.toFixed(2) }}</td>
-                  <td>{{ item.above618.toFixed(2) }}</td>
-                  <td>{{ item.below618.toFixed(2) }}</td>
-                  <td>{{ item.above382.toFixed(2) }}</td>
-                  <td>{{ item.below382.toFixed(2) }}</td>
+                  <td>{{ item.latest_price.toFixed(2) }}</td>
+                  <td>{{ item.total_return.toFixed(2) }}%</td>
+                  <td>{{ item.avg_change.toFixed(2) }}%</td>
+                  <td>{{ item.max_change.toFixed(2) }}%</td>
+                  <td>{{ item.min_change.toFixed(2) }}%</td>
+                  <td>{{ item.recent_days['5_days'].toFixed(2) }}%</td>
+                  <td>{{ item.recent_days['30_days'].toFixed(2) }}%</td>
+                  <td>{{ item.recent_days['60_days'].toFixed(2) }}%</td>
                 </tr>
               </tbody>
             </table>
@@ -554,7 +518,6 @@ const tabs = [
 // 单个股票参数
 const singleParams = ref({
   symbol: '',
-  resample: 5,
   period: '1d' // 新增：时间周期参数
 });
 const singleResult = ref<any>(null);
@@ -563,7 +526,6 @@ const singleResult = ref<any>(null);
 const pairParams = ref({
   symbol: '',
   benchmark_symbol: '',
-  resample: 5,
   period: '1d' // 新增：时间周期参数
 });
 const pairResult = ref<any>(null);
@@ -571,7 +533,6 @@ const pairResult = ref<any>(null);
 // 多只股票参数
 const multiParams = ref({
   symbolsText: '',
-  resample: 5,
   period: '1d' // 新增：时间周期参数
 });
 const multiResult = ref<any>(null);
@@ -604,8 +565,8 @@ const fetchApi = async (url: string, options: any = {}) => {
   }
 };
 
-// 获取单个股票黄金分割分析
-const getSingleGoldenSection = async () => {
+// 获取单个股票涨跌幅分析
+const getSinglePriceChange = async () => {
   if (!singleParams.value.symbol) {
     error.value = '请选择股票代码';
     return;
@@ -614,19 +575,18 @@ const getSingleGoldenSection = async () => {
   try {
     const params = new URLSearchParams({
       symbol: singleParams.value.symbol,
-      resample: singleParams.value.resample.toString(),
       period: singleParams.value.period // 新增：传递时间周期参数
     });
     
-    const result = await fetchApi(`/api/moA/golden-section/single?${params}`);
+    const result = await fetchApi(`/api/moA/price-change/single?${params}`);
     singleResult.value = result;
   } catch (err) {
-    console.error('获取单个股票黄金分割分析失败:', err);
+    console.error('获取单个股票涨跌幅分析失败:', err);
   }
 };
 
-// 获取两只股票黄金分割对比
-const getPairGoldenSection = async () => {
+// 获取两只股票涨跌幅对比
+const getPairPriceChange = async () => {
   if (!pairParams.value.symbol || !pairParams.value.benchmark_symbol) {
     error.value = '请选择两只股票的代码';
     return;
@@ -636,19 +596,18 @@ const getPairGoldenSection = async () => {
     const params = new URLSearchParams({
       symbol: pairParams.value.symbol,
       benchmark_symbol: pairParams.value.benchmark_symbol,
-      resample: pairParams.value.resample.toString(),
       period: pairParams.value.period // 新增：传递时间周期参数
     });
     
-    const result = await fetchApi(`/api/moA/golden-section/pair?${params}`);
+    const result = await fetchApi(`/api/moA/price-change/pair?${params}`);
     pairResult.value = result;
   } catch (err) {
-    console.error('获取两只股票黄金分割对比失败:', err);
+    console.error('获取两只股票涨跌幅对比失败:', err);
   }
 };
 
-// 获取多只股票黄金分割对比
-const getMultiGoldenSection = async () => {
+// 获取多只股票涨跌幅对比
+const getMultiPriceChange = async () => {
   if (!multiParams.value.symbolsText) {
     error.value = '请输入股票代码列表';
     return;
@@ -665,18 +624,17 @@ const getMultiGoldenSection = async () => {
       return;
     }
     
-    const result = await fetchApi('/api/moA/golden-section/multi', {
+    const result = await fetchApi('/api/moA/price-change/multi', {
       method: 'POST',
       body: JSON.stringify({
         symbols: symbols,
-        resample: multiParams.value.resample,
         period: multiParams.value.period // 新增：传递时间周期参数
       })
     });
     
     multiResult.value = result;
   } catch (err) {
-    console.error('获取多只股票黄金分割对比失败:', err);
+    console.error('获取多只股票涨跌幅对比失败:', err);
   }
 };
 
@@ -867,7 +825,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.golden-section-container {
+.price-change-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;

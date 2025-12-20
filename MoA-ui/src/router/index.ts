@@ -82,6 +82,11 @@ const router = createRouter({
       path: '/data-query',
       name: 'data-query',
       component: () => import('../views/DataQueryView.vue')
+    },
+    {
+      path: '/price-change',
+      name: 'price-change',
+      component: () => import('../views/PriceChangeView.vue')
     }
   ]
 })

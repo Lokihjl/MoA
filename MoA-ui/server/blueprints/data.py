@@ -537,6 +537,145 @@ def get_data_download_record(record_id):
         print('获取数据下载记录失败:', str(e))
         return jsonify({'error': f'获取数据下载记录失败: {str(e)}'}), 500
 
+# 获取已下载的股票列表
+@moA_bp.route('/data/download/symbols', methods=['GET'])
+def get_downloaded_symbols():
+    try:
+        # 查询所有已下载的股票代码，去重
+        symbols = db.session.query(KlineData.symbol, KlineData.market).distinct().all()
+        
+        # 转换为前端需要的格式
+        symbols_list = []
+        for symbol, market in symbols:
+            symbols_list.append({
+                'symbol': symbol,
+                'market': market
+            })
+        
+        return jsonify(symbols_list), 200
+    except Exception as e:
+        print('获取已下载股票列表失败:', str(e))
+        return jsonify({'error': f'获取已下载股票列表失败: {str(e)}'}), 500
+
+# 获取阻力位和支撑位数据
+@moA_bp.route('/data/resistance-support', methods=['GET'])
+def get_resistance_support():
+    try:
+        # 获取请求参数
+        symbol = request.args.get('symbol', '')
+        market = request.args.get('market', 'cn')
+        data_type = request.args.get('data_type', 'day')
+        start_date = request.args.get('start_date', '')
+        end_date = request.args.get('end_date', '')
+        
+        if not symbol:
+            return jsonify({'error': '股票代码不能为空'}), 400
+        
+        # 查询K线数据
+        kline_query = KlineData.query.filter_by(
+            symbol=symbol,
+            market=market,
+            data_type=data_type
+        )
+        
+        # 如果提供了日期范围，添加日期过滤
+        if start_date:
+            kline_query = kline_query.filter(KlineData.date >= start_date)
+        if end_date:
+            kline_query = kline_query.filter(KlineData.date <= end_date)
+        
+        # 按日期排序
+        kline_records = kline_query.order_by(KlineData.date.asc()).all()
+        
+        # 转换为前端需要的格式
+        kline_data = []
+        for record in kline_records:
+            kline_data.append({
+                'date': record.date,
+                'open': float(record.open),
+                'high': float(record.high),
+                'low': float(record.low),
+                'close': float(record.close),
+                'volume': record.volume,
+                'amount': record.amount
+            })
+        
+        # 计算阻力位和支撑位
+        resistance_levels = []
+        support_levels = []
+        
+        if kline_data:
+            # 提取所有最高价和最低价
+            all_highs = [item['high'] for item in kline_data]
+            all_lows = [item['low'] for item in kline_data]
+            
+            # 合并所有价格点
+            all_prices = all_highs + all_lows
+            
+            # 计算价格分布
+            price_distribution = {}
+            for price in all_prices:
+                # 四舍五入到两位小数
+                rounded_price = round(price, 2)
+                if rounded_price in price_distribution:
+                    price_distribution[rounded_price] += 1
+                else:
+                    price_distribution[rounded_price] = 1
+            
+            # 找出出现频率高的价格点
+            sorted_prices = sorted(price_distribution.items(), key=lambda x: x[1], reverse=True)
+            key_prices = [price for price, count in sorted_prices[:8]]
+            
+            # 计算最高价、最低价和平均价
+            high_price = max(all_highs)
+            low_price = min(all_lows)
+            avg_price = sum(all_prices) / len(all_prices)
+            
+            # 添加关键价格点
+            key_prices.extend([high_price, low_price, avg_price])
+            
+            # 去重并排序
+            unique_key_prices = sorted(list(set([round(p, 2) for p in key_prices])))
+            
+            # 获取当前价格
+            current_price = kline_data[-1]['close']
+            
+            # 计算阻力位和支撑位
+            resistance_levels = [p for p in unique_key_prices if p > current_price][-3:]
+            support_levels = [p for p in unique_key_prices if p < current_price][-3:]
+            support_levels.reverse()  # 反转，使最接近当前价格的支撑位在前面
+            
+            # 如果阻力位或支撑位不足，使用价格百分比计算
+            if len(resistance_levels) < 3:
+                price_range = high_price - low_price
+                for i in range(len(resistance_levels), 3):
+                    resistance = current_price + (i + 1) * (price_range * 0.1)
+                    resistance_levels.append(round(resistance, 2))
+            
+            if len(support_levels) < 3:
+                price_range = high_price - low_price
+                additional_supports = []
+                for i in range(len(support_levels), 3):
+                    support = current_price - (i + 1) * (price_range * 0.1)
+                    additional_supports.append(round(support, 2))
+                support_levels.extend(additional_supports)
+                support_levels.reverse()
+        
+        # 返回结果
+        return jsonify({
+            'symbol': symbol,
+            'market': market,
+            'data_type': data_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'kline_data': kline_data,
+            'resistance_levels': resistance_levels,
+            'support_levels': support_levels
+        }), 200
+    except Exception as e:
+        print('获取阻力位支撑位数据失败:', str(e))
+        return jsonify({'error': f'获取阻力位支撑位数据失败: {str(e)}'}), 500
+
 # 取消数据下载任务
 @moA_bp.route('/data/download/records/<int:record_id>/cancel', methods=['PUT'])
 def cancel_data_download(record_id):
@@ -863,9 +1002,9 @@ def query_kline_data():
         traceback.print_exc()
         return jsonify({'error': f'查询K线数据失败: {str(e)}'}), 500
 
-# 获取已下载的股票列表
+# 获取可用的股票列表
 @moA_bp.route('/data/symbols', methods=['GET'])
-def get_downloaded_symbols():
+def get_available_symbols():
     try:
         # 获取市场参数
         market = request.args.get('market', None)
@@ -890,8 +1029,8 @@ def get_downloaded_symbols():
         
         return jsonify(result), 200
     except Exception as e:
-        print('获取已下载股票列表失败:', str(e))
-        return jsonify({'error': f'获取已下载股票列表失败: {str(e)}'}), 500
+        print('获取可用股票列表失败:', str(e))
+        return jsonify({'error': f'获取可用股票列表失败: {str(e)}'}), 500
 
 # 获取股票基本信息
 @moA_bp.route('/data/stock_basic', methods=['GET'])
