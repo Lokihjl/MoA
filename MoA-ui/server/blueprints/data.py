@@ -58,13 +58,34 @@ def create_data_download():
             for index, row in kl_df.iterrows():
                 try:
                     # 获取日期
+                    date_obj = None
+                    
+                    # 新浪财经API返回的DataFrame中，index是Timestamp类型
                     if hasattr(index, 'date'):
                         # 如果index是Timestamp类型，直接获取date属性
                         date_obj = index.date()
-                    else:
-                        # 否则尝试转换
+                    elif 'date' in row:
+                        # 兼容其他数据源的date字段
                         date_str = str(row['date'])
-                        date_obj = datetime.strptime(date_str, '%Y%m%d').date()
+                        if '-' in date_str:
+                            # 格式：2025-12-20
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+                        else:
+                            # 格式：20251220
+                            date_obj = datetime.strptime(date_str, '%Y%m%d').date()
+                    elif 'day' in row:
+                        # 兼容原始API返回的day字段
+                        date_str = str(row['day'])
+                        if '-' in date_str:
+                            # 格式：2025-12-20
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+                        else:
+                            # 格式：20251220
+                            date_obj = datetime.strptime(date_str, '%Y%m%d').date()
+                    
+                    if not date_obj:
+                        print(f"无法获取日期: {row}")
+                        continue
                     
                     # 跳过已存在的数据
                     if date_obj in existing_date_set:
@@ -81,13 +102,16 @@ def create_data_download():
                         low=float(row['low']),
                         close=float(row['close']),
                         volume=float(row['volume']),
-                        amount=float(row.get('amount', 0)) if row.get('amount') else None,
-                        adjust=float(row.get('adjust', 1)) if row.get('adjust') else None,
-                        atr21=float(row['atr21']) if 'atr21' in row else None
+                        amount=float(row['amount']) if row.get('amount') is not None and row.get('amount') != '' else None,
+                        adjust=float(row['adjust']) if row.get('adjust') is not None and row.get('adjust') != '' else None,
+                        atr21=float(row['atr21']) if 'atr21' in row and row['atr21'] is not None else None
                     )
                     new_records.append(kline_record)
                 except Exception as e:
                     print(f"处理{symbol}的K线数据时出错: {e}")
+                    print(f"出错行数据: {row}")
+                    import traceback
+                    traceback.print_exc()
                     continue
             
             # 批量插入新数据
@@ -101,6 +125,73 @@ def create_data_download():
                     return 0
             
             return len(new_records)
+        
+        # 获取A股股票列表
+        def get_a_share_stocks():
+            """
+            获取全A股股票列表
+            :return: A股股票代码列表，格式如['sh600000', 'sz000001', ...]
+            """
+            try:
+                import requests
+                import pandas as pd
+                
+                # 使用新浪财经获取A股股票列表（使用HTTP协议，避免SSL问题）
+                # 主板A股
+                sh_url = 'http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=10000&sort=symbol&asc=1&node=sh_a&symbol=&_s_r_a=page'
+                sz_url = 'http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=10000&sort=symbol&asc=1&node=sz_a&symbol=&_s_r_a=page'
+                
+                stocks = []
+                
+                # 尝试多次请求，最多3次
+                max_retries = 3
+                for retry in range(max_retries):
+                    try:
+                        # 配置请求头，模拟浏览器访问
+                        headers = {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                        }
+                        
+                        # 获取上海A股
+                        print(f'尝试获取上海A股列表，第{retry+1}次...')
+                        sh_response = requests.get(sh_url, timeout=15, headers=headers)
+                        sh_response.raise_for_status()
+                        sh_data = sh_response.json()
+                        print(f'上海A股API返回数据长度: {len(sh_data)}')
+                        
+                        for stock in sh_data:
+                            stocks.append(f'sh{stock["symbol"]}')
+                        
+                        # 获取深圳A股
+                        print(f'尝试获取深圳A股列表，第{retry+1}次...')
+                        sz_response = requests.get(sz_url, timeout=15, headers=headers)
+                        sz_response.raise_for_status()
+                        sz_data = sz_response.json()
+                        print(f'深圳A股API返回数据长度: {len(sz_data)}')
+                        
+                        for stock in sz_data:
+                            stocks.append(f'sz{stock["symbol"]}')
+                        
+                        break  # 成功获取数据，跳出重试循环
+                    except Exception as retry_e:
+                        print(f'第{retry+1}次尝试失败: {retry_e}')
+                        if retry == max_retries - 1:
+                            # 最后一次尝试失败，使用默认的A股股票列表
+                            print('最后一次尝试失败，使用默认的A股股票列表')
+                            return ['sh600000', 'sh600036', 'sh600519', 'sh601398', 'sh601857',
+                                    'sz000001', 'sz000002', 'sz000858', 'sz002415', 'sz300750']
+                        import time
+                        time.sleep(3)  # 等待3秒后重试
+                
+                print(f'获取到A股股票数量: {len(stocks)}')
+                return stocks
+            except Exception as e:
+                print(f'获取A股股票列表失败: {e}')
+                import traceback
+                traceback.print_exc()
+                # 如果API获取失败，使用默认的A股股票列表
+                return ['sh600000', 'sh600036', 'sh600519', 'sh601398', 'sh601857',
+                        'sz000001', 'sz000002', 'sz000858', 'sz002415', 'sz300750']
         
         # 直接使用新浪财经API获取历史数据
         def get_historical_data_from_sina(symbol, datalen=252):
@@ -207,10 +298,10 @@ def create_data_download():
                     # 获取已下载的股票列表
                     symbols = download_params.get('symbols', [])
                     if not symbols:
-                        # 如果没有指定股票，使用默认的A股股票列表
-                        # 这里我们使用一些常见的A股股票作为示例
-                        symbols = ['sh600000', 'sh600036', 'sh600519', 'sh601398', 'sh601857',
-                                  'sz000001', 'sz000002', 'sz000858', 'sz002415', 'sz300750']
+                        # 如果没有指定股票，获取全A股股票列表
+                        print('未指定股票，获取全A股股票列表...')
+                        symbols = get_a_share_stocks()
+                        print(f'获取到{len(symbols)}只A股股票')
                     
                     # 更新进度：开始数据下载
                     current_record.progress = 50
@@ -219,6 +310,7 @@ def create_data_download():
                     
                     # 将下载的数据保存到SQLite数据库
                     total_records = 0
+                    incremental_records = 0  # 新增：统计增量更新的条数
                     total_symbols = len(symbols)
                     
                     # 调试：打印股票列表信息
@@ -245,9 +337,33 @@ def create_data_download():
                             current_record.error_message = f'正在下载第{index+1}/{total_symbols}只股票：{symbol}...'
                             db.session.commit()
                             
-                            # 直接从新浪财经API获取K线数据
-                            print(f"正在获取{symbol}的K线数据...")
-                            kl_df = get_historical_data_from_sina(symbol, datalen=252)
+                            # 获取当前记录的数据类型
+                            current_data_type = current_record.data_type
+                            
+                            # 检查数据库中最新的日期，实现增量更新
+                            latest_date = db.session.query(db.func.max(KlineData.date)).filter(
+                                KlineData.symbol == symbol,
+                                KlineData.market == current_record.market,
+                                KlineData.data_type == current_data_type
+                            ).scalar()
+                            
+                            # 如果有最新日期，获取该日期之后的数据，否则获取365天数据
+                            if latest_date:
+                                print(f"{symbol}已存在数据，最新日期为{latest_date}，执行增量更新...")
+                                # 从新浪财经API获取数据
+                                kl_df = get_historical_data_from_sina(symbol, datalen=365)
+                                
+                                if kl_df is not None and not kl_df.empty:
+                                    # 确保latest_date是datetime64类型，与kl_df.index类型匹配
+                                    import pandas as pd
+                                    latest_date_dt = pd.to_datetime(latest_date)
+                                    # 过滤出最新日期之后的数据
+                                    kl_df = kl_df[kl_df.index > latest_date_dt]
+                                    print(f"增量更新：过滤后有{len(kl_df)}条新数据")
+                            else:
+                                print(f"{symbol}不存在数据，执行首次下载...")
+                                # 首次下载，获取365天数据
+                                kl_df = get_historical_data_from_sina(symbol, datalen=365)
                             
                             # 调试：打印K线数据信息
                             if kl_df is None:
@@ -261,6 +377,12 @@ def create_data_download():
                                 # 保存到SQLite数据库
                                 records_saved = save_kl_data_to_db(kl_df, symbol, current_record.market, current_record.data_type)
                                 total_records += records_saved
+                                
+                                # 新增：判断是否是增量更新，如果是则累加增量更新的条数
+                                if latest_date:
+                                    incremental_records += records_saved
+                                    print(f"{symbol}增量更新了{records_saved}条记录")
+                                
                                 success_count += 1
                                 
                                 # 重新获取会话，确保会话有效
@@ -291,13 +413,14 @@ def create_data_download():
                         current_record.status = 'completed'
                         current_record.end_time = datetime.utcnow()
                         current_record.total_downloaded = total_records
+                        current_record.incremental_downloaded = incremental_records  # 新增：保存增量更新的条数
                         current_record.success_symbols = success_count
                         
                         # 根据下载结果设置不同的错误消息
                         if total_records == 0:
                             current_record.error_message = f'下载完成，但未获取到任何有效数据：共处理{total_symbols}只股票，成功{success_count}只，保存{total_records}条K线数据'
                         else:
-                            current_record.error_message = f'成功完成下载任务：共处理{total_symbols}只股票，成功{success_count}只，保存{total_records}条K线数据到SQLite数据库'
+                            current_record.error_message = f'成功完成下载任务：共处理{total_symbols}只股票，成功{success_count}只，保存{total_records}条K线数据到SQLite数据库，其中增量更新{incremental_records}条'
                         db.session.commit()
                 except Exception as e:
                     # 下载失败
@@ -372,6 +495,7 @@ def get_data_download_records():
                 'error_message': record.error_message,
                 'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 'total_downloaded': record.total_downloaded,
+                'incremental_downloaded': record.incremental_downloaded,
                 'total_symbols': record.total_symbols,
                 'success_symbols': record.success_symbols
             })
@@ -392,20 +516,21 @@ def get_data_download_record(record_id):
         
         # 格式化返回结果
         result = {
-            'id': record.id,
-            'market': record.market,
-            'data_type': record.data_type,
-            'symbols': record.symbols.split(','),
-            'status': record.status,
-            'progress': record.progress,
-            'start_time': record.start_time.strftime('%Y-%m-%d %H:%M:%S') if record.start_time else None,
-            'end_time': record.end_time.strftime('%Y-%m-%d %H:%M:%S') if record.end_time else None,
-            'error_message': record.error_message,
-            'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-            'total_downloaded': record.total_downloaded,
-            'total_symbols': record.total_symbols,
-            'success_symbols': record.success_symbols
-        }
+                'id': record.id,
+                'market': record.market,
+                'data_type': record.data_type,
+                'symbols': record.symbols.split(','),
+                'status': record.status,
+                'progress': record.progress,
+                'start_time': record.start_time.strftime('%Y-%m-%d %H:%M:%S') if record.start_time else None,
+                'end_time': record.end_time.strftime('%Y-%m-%d %H:%M:%S') if record.end_time else None,
+                'error_message': record.error_message,
+                'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'total_downloaded': record.total_downloaded,
+                'incremental_downloaded': record.incremental_downloaded,
+                'total_symbols': record.total_symbols,
+                'success_symbols': record.success_symbols
+            }
         
         return jsonify(result), 200
     except Exception as e:
@@ -460,36 +585,178 @@ def retry_data_download(record_id):
         db.session.add(new_record)
         db.session.commit()
         
-        # 模拟异步下载过程
-        def simulate_download():
-            # 更新状态为运行中
-            new_record.status = 'running'
-            new_record.start_time = datetime.utcnow()
-            db.session.commit()
-            
-            try:
-                # 模拟下载进度
-                for i in range(1, 101, 10):
-                    import time
-                    time.sleep(0.5)  # 模拟下载延迟
-                    new_record.progress = i
-                    db.session.commit()
-                
-                # 下载完成
-                new_record.status = 'completed'
-                new_record.end_time = datetime.utcnow()
-                db.session.commit()
-            except Exception as e:
-                # 下载失败
-                new_record.status = 'failed'
-                new_record.error_message = str(e)
-                new_record.end_time = datetime.utcnow()
-                db.session.commit()
+        # 线程停止标志
+        stop_event = threading.Event()
         
-        # 启动模拟下载线程
-        download_thread = threading.Thread(target=simulate_download)
+        # 获取当前应用实例，用于在后台线程中创建应用上下文
+        app = current_app._get_current_object()
+        
+        # 实际调用ABU系统的run_kl_update函数并将数据保存到SQLite
+        def actual_download():
+            with app.app_context():
+                try:
+                    # 在后台线程中使用新的数据库会话
+                    from models import db, DataDownloadRecord
+                    
+                    # 创建新的数据库会话
+                    db.session.rollback()
+                    
+                    # 获取最新的下载记录
+                    current_record = db.session.query(DataDownloadRecord).filter_by(id=new_record.id).first()
+                    if not current_record:
+                        print(f"下载记录{new_record.id}不存在")
+                        return
+                    
+                    # 更新状态为运行中
+                    current_record.status = 'running'
+                    current_record.start_time = datetime.utcnow()
+                    current_record.error_message = '正在初始化下载任务...'
+                    db.session.commit()
+                    
+                    # 获取下载参数
+                    current_market = current_record.market
+                    
+                    # 更新进度：初始化完成
+                    current_record.progress = 10
+                    current_record.error_message = '正在设置下载环境...'
+                    db.session.commit()
+                    
+                    # 更新进度：开始准备数据
+                    current_record.progress = 20
+                    current_record.error_message = '正在准备下载参数和股票列表...'
+                    db.session.commit()
+                    
+                    # 获取已下载的股票列表
+                    symbols = record.symbols.split(',') if record.symbols != 'all' else []
+                    if not symbols:
+                        # 如果没有指定股票，获取全A股股票列表
+                        print('未指定股票，获取全A股股票列表...')
+                        symbols = get_a_share_stocks()
+                        print(f'获取到{len(symbols)}只A股股票')
+                    
+                    # 更新进度：开始数据下载
+                    current_record.progress = 50
+                    current_record.error_message = f'开始从新浪财经API下载{len(symbols)}只股票的数据...'
+                    db.session.commit()
+                    
+                    # 将下载的数据保存到SQLite数据库
+                    total_records = 0
+                    total_symbols = len(symbols)
+                    
+                    # 调试：打印股票列表信息
+                    print(f"准备处理{total_symbols}只股票：{symbols[:10]}...")
+                    
+                    # 统计成功获取数据的股票数量
+                    success_count = 0
+                    
+                    # 更新下载记录的股票数量信息
+                    current_record.total_symbols = total_symbols
+                    db.session.commit()
+                    
+                    for index, symbol in enumerate(symbols):
+                        try:
+                            # 重新获取会话，确保会话有效
+                            current_record = db.session.query(DataDownloadRecord).filter_by(id=new_record.id).first()
+                            if not current_record:
+                                print(f"下载记录{new_record.id}不存在")
+                                break
+                            
+                            # 计算当前进度
+                            progress_percent = 50 + int((index / total_symbols) * 40)  # 50%到90%之间
+                            current_record.progress = progress_percent
+                            current_record.error_message = f'正在下载第{index+1}/{total_symbols}只股票：{symbol}...'
+                            db.session.commit()
+                            
+                            # 直接从新浪财经API获取K线数据，获取365天数据确保增量更新
+                            print(f"正在获取{symbol}的K线数据...")
+                            kl_df = get_historical_data_from_sina(symbol, datalen=365)
+                            
+                            # 调试：打印K线数据信息
+                            if kl_df is None:
+                                print(f"{symbol}的K线数据为None")
+                            elif kl_df.empty:
+                                print(f"{symbol}的K线数据为空")
+                            else:
+                                print(f"{symbol}的K线数据成功获取，共{len(kl_df)}条记录")
+                            
+                            if kl_df is not None and not kl_df.empty:
+                                # 保存到SQLite数据库
+                                records_saved = save_kl_data_to_db(kl_df, symbol, current_record.market, current_record.data_type)
+                                total_records += records_saved
+                                success_count += 1
+                                
+                                # 重新获取会话，确保会话有效
+                                current_record = db.session.query(DataDownloadRecord).filter_by(id=new_record.id).first()
+                                if not current_record:
+                                    print(f"下载记录{new_record.id}不存在")
+                                    break
+                                
+                                # 更新进度信息
+                                current_record.error_message = f'已处理第{index+1}/{total_symbols}只股票：{symbol}，保存了{records_saved}条记录...'
+                                db.session.commit()
+                        except Exception as e:
+                            error_msg = f'保存{symbol}数据失败: {str(e)}'
+                            print(error_msg)
+                            
+                            # 重新获取会话，确保会话有效
+                            current_record = db.session.query(DataDownloadRecord).filter_by(id=new_record.id).first()
+                            if current_record:
+                                current_record.error_message = error_msg
+                                db.session.commit()
+                            continue
+                    
+                    # 重新获取会话，确保会话有效
+                    current_record = db.session.query(DataDownloadRecord).filter_by(id=new_record.id).first()
+                    if current_record:
+                        # 下载完成
+                        current_record.progress = 100
+                        current_record.status = 'completed'
+                        current_record.end_time = datetime.utcnow()
+                        current_record.total_downloaded = total_records
+                        current_record.success_symbols = success_count
+                        
+                        # 根据下载结果设置不同的错误消息
+                        if total_records == 0:
+                            current_record.error_message = f'下载完成，但未获取到任何有效数据：共处理{total_symbols}只股票，成功{success_count}只，保存{total_records}条K线数据'
+                        else:
+                            current_record.error_message = f'成功完成下载任务：共处理{total_symbols}只股票，成功{success_count}只，保存{total_records}条K线数据到SQLite数据库'
+                        db.session.commit()
+                except Exception as e:
+                    # 下载失败
+                    error_msg = f'下载任务失败: {str(e)}'
+                    print(error_msg)
+                    
+                    # 重新获取会话，确保会话有效
+                    try:
+                        current_record = db.session.query(DataDownloadRecord).filter_by(id=new_record.id).first()
+                        if current_record:
+                            current_record.status = 'failed'
+                            current_record.error_message = error_msg
+                            current_record.end_time = datetime.utcnow()
+                            db.session.commit()
+                    except Exception as commit_error:
+                        print(f"更新下载失败状态时出错: {commit_error}")
+                finally:
+                    # 关闭数据库会话
+                    try:
+                        db.session.close()
+                    except:
+                        pass
+                    
+                    # 从running_threads中移除
+                    if new_record.id in running_threads:
+                        del running_threads[new_record.id]
+        
+        # 启动实际下载线程
+        download_thread = threading.Thread(target=actual_download)
         download_thread.daemon = True
         download_thread.start()
+        
+        # 存储线程信息
+        running_threads[new_record.id] = {
+            'thread': download_thread,
+            'stop_event': stop_event
+        }
         
         # 返回新的下载任务信息
         return jsonify({
@@ -625,6 +892,85 @@ def get_downloaded_symbols():
     except Exception as e:
         print('获取已下载股票列表失败:', str(e))
         return jsonify({'error': f'获取已下载股票列表失败: {str(e)}'}), 500
+
+# 获取股票基本信息
+@moA_bp.route('/data/stock_basic', methods=['GET'])
+def get_stock_basic_info():
+    try:
+        # 获取查询参数
+        symbol = request.args.get('symbol', None)
+        market = request.args.get('market', None)
+        
+        if not symbol:
+            return jsonify({'error': '股票代码不能为空'}), 400
+        
+        # 从KlineData表中获取最新的价格数据
+        latest_kline = KlineData.query.filter_by(
+            symbol=symbol,
+            market=market
+        ).order_by(KlineData.date.desc()).first()
+        
+        if not latest_kline:
+            return jsonify({'error': '未找到该股票的数据'}), 404
+        
+        # 获取前一天的数据用于计算涨跌幅
+        previous_kline = KlineData.query.filter_by(
+            symbol=symbol,
+            market=market
+        ).filter(KlineData.date < latest_kline.date).order_by(KlineData.date.desc()).first()
+        
+        # 计算涨跌幅
+        change_percent = 0.0
+        if previous_kline:
+            change_percent = ((latest_kline.close - previous_kline.close) / previous_kline.close) * 100
+        
+        # 解析股票名称（简单实现，实际应该从外部API获取）
+        stock_name_map = {
+            'sh600000': '浦发银行',
+            'sh600036': '招商银行',
+            'sh600519': '贵州茅台',
+            'sh601398': '工商银行',
+            'sh601857': '中国石油',
+            'sh601118': '海南橡胶',
+            'sz000001': '平安银行',
+            'sz000002': '万科A',
+            'sz000858': '五粮液',
+            'sz002415': '海康威视',
+            'sz300750': '宁德时代'
+        }
+        
+        stock_name = stock_name_map.get(symbol, symbol)
+        
+        # 格式化市场名称
+        market_name_map = {
+            'cn': 'A股',
+            'us': '美股',
+            'hk': '港股'
+        }
+        
+        market_name = market_name_map.get(market, market)
+        
+        # 构建股票基本信息
+        basic_info = {
+            'symbol': symbol,
+            'name': stock_name,
+            'market': market_name,
+            'currentPrice': float(latest_kline.close),
+            'changePercent': round(change_percent, 2),
+            'volume': float(latest_kline.volume),
+            'open': float(latest_kline.open),
+            'high': float(latest_kline.high),
+            'low': float(latest_kline.low),
+            'close': float(latest_kline.close),
+            'latestDate': str(latest_kline.date)
+        }
+        
+        return jsonify(basic_info), 200
+    except Exception as e:
+        print('获取股票基本信息失败:', str(e))
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'获取股票基本信息失败: {str(e)}'}), 500
 
 # 获取支持的市场列表
 @moA_bp.route('/data/markets', methods=['GET'])

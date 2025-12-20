@@ -209,9 +209,10 @@ const testApi = async () => {
 
 <style scoped>
 .finance-api-test {
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 20px;
+  box-sizing: border-box;
 }
 
 h1 {

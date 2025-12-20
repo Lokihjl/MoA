@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
 interface StockInfo {
@@ -118,7 +118,7 @@ interface StockHistory {
 }
 
 // 股票代码输入
-const stockSymbol = ref('sh600000')
+const stockSymbol = ref('')
 // 加载状态
 const isSearching = ref(false)
 // 是否尝试过搜索
@@ -129,8 +129,6 @@ const stockInfo = ref<StockInfo | null>(null)
 const stockHistory = ref<StockHistory | null>(null)
 // 图表容器
 const chartContainer = ref<HTMLElement | null>(null)
-// 图表实例
-let chartInstance: any = null
 // 错误信息
 const errorMessage = ref('')
 // 示例股票代码
@@ -227,16 +225,14 @@ const drawChart = () => {
   chartContainer.value.innerHTML = chartHtml
 }
 
-// 组件挂载时不自动查询，等待用户手动触发
-onMounted(() => {
-  // 不自动调用searchStock，等待用户手动查询
-})
+
 </script>
 
 <style scoped>
 .stock-info-container {
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
   padding: 2rem 0;
 }
 

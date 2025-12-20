@@ -18,7 +18,7 @@ def run_loopback():
     try:
         # 获取回测参数
         params = request.get_json()
-        print('收到回测请求:', params)
+
         
         # 获取回测参数
         initial_cash = params.get('initialCash', 1000000)
@@ -41,7 +41,7 @@ def run_loopback():
             if a_stock_pattern.match(symbol):
                 valid_symbols.append(symbol)
             else:
-                print(f'股票代码{symbol}不是A股股票代码，跳过该股票')
+                pass
         
         # 如果没有有效股票，使用默认A股股票
         if not valid_symbols:
@@ -72,7 +72,7 @@ def run_loopback():
                 ).order_by(KlineData.date.asc()).all()
                 
                 if kline_records:
-                    print(f'从本地数据库获取到{len(kline_records)}条{symbol}的K线数据')
+
                     
                     # 将数据库数据转换为DataFrame
                     data_list = []
@@ -97,7 +97,7 @@ def run_loopback():
                     from_db = True  # 数据来自数据库
                     data_source = '本地数据库数据'
                 else:
-                    print(f'从本地数据库获取股票{symbol}数据失败，尝试从ABU框架获取')
+
                     # 2. 尝试从ABU框架获取数据
                     try:
                         from abupy import ABuSymbolPd
@@ -107,20 +107,16 @@ def run_loopback():
                             data_mode='p'
                         )
                         if kl_pd is not None and not kl_pd.empty:
-                            print(f'从ABU框架获取到股票{symbol}的数据')
                             from_db = False  # 数据来自ABU框架
                             data_source = 'ABU框架 + 腾讯财经数据源'
                         else:
-                            print(f'从ABU框架获取股票{symbol}数据失败，跳过该股票')
                             kl_pd = None
                     except Exception as e:
                         # 捕获ABU框架可能抛出的错误
-                        print(f'ABU框架获取数据出错: {e}')
                         kl_pd = None
                 
                 # 检查数据是否有效
                 if kl_pd is None or kl_pd.empty or len(kl_pd) < 20:
-                    print(f'股票{symbol}的数据不足或为空，跳过该股票')
                     continue
                 
                 # 3. 执行真实的交易策略，基于真实K线数据生成交易记录
@@ -179,9 +175,6 @@ def run_loopback():
                                 buy_signal = None
                 except Exception as e:
                     # 捕获所有可能的计算错误
-                    print(f'执行交易策略时出错: {e}')
-                    import traceback
-                    traceback.print_exc()
                     continue
                 
                 # 计算回测指标
@@ -217,9 +210,6 @@ def run_loopback():
                         'from_db': from_db
                     })
             except Exception as e:
-                print(f'回测股票{symbol}失败: {str(e)}')
-                import traceback
-                traceback.print_exc()
                 continue
         
         # 计算平均结果
@@ -262,9 +252,6 @@ def run_loopback():
         # 返回回测结果
         return jsonify(backtest_result), 200
     except Exception as e:
-        print('回测失败:', str(e))
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': f'回测失败: {str(e)}'}), 500
 
 # 获取回测记录列表
@@ -286,7 +273,6 @@ def get_loopback_records():
         
         return jsonify(result), 200
     except Exception as e:
-        print('获取回测记录失败:', str(e))
         return jsonify({'error': f'获取回测记录失败: {str(e)}'}), 500
 
 # 获取单个回测记录

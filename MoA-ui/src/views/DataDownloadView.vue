@@ -85,6 +85,7 @@
                 <th>处理股票数</th>
                 <th>成功股票数</th>
                 <th>下载条数</th>
+                <th>增量更新条数</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -114,6 +115,7 @@
                 <td>{{ record.total_symbols }}</td>
                 <td>{{ record.success_symbols }}</td>
                 <td>{{ record.total_downloaded }}</td>
+                <td>{{ record.incremental_downloaded || 0 }}</td>
                 <td>{{ record.created_at }}</td>
                 <td>
                   <button 
@@ -321,7 +323,7 @@ let timeoutId: number | null = null
 // 立即停止定时器的函数
 const stopTimeout = () => {
   if (timeoutId !== null) {
-    console.log('强制停止定时器')
+
     clearTimeout(timeoutId)
     timeoutId = null
   }
@@ -332,10 +334,7 @@ const checkAndFetch = async () => {
   // 检查是否有下载任务
   const hasDownloadTasks = downloadRecords.value.length > 0
   
-  console.log('检查刷新状态:', {
-    hasDownloadTasks,
-    recordCount: downloadRecords.value.length
-  })
+
   
   // 如果没有下载任务，停止所有定时器
   if (!hasDownloadTasks) {
@@ -348,16 +347,11 @@ const checkAndFetch = async () => {
     record.status === 'running' || record.status === 'pending'
   )
   
-  console.log('活跃任务检查:', {
-    hasActiveDownloads,
-    activeTasks: downloadRecords.value.filter(record => 
-      record.status === 'running' || record.status === 'pending'
-    ).length
-  })
+
   
   // 如果有活跃任务，刷新记录并重新设置定时器
   if (hasActiveDownloads) {
-    console.log('执行刷新')
+
     await fetchDownloadRecords()
     
     // 重新设置定时器，确保每次刷新后都检查状态
@@ -368,7 +362,7 @@ const checkAndFetch = async () => {
   }
   // 如果没有活跃任务，停止定时器
   else {
-    console.log('无活跃任务，停止刷新')
+
     stopTimeout()
   }
 }
@@ -391,7 +385,7 @@ const checkAndSetTimeout = () => {
   
   // 如果有活跃任务且定时器未运行，启动一次性定时器
   if (hasActiveDownloads && timeoutId === null) {
-    console.log('启动一次性定时器')
+
     timeoutId = setTimeout(() => {
       checkAndFetch()
     }, 5000)
@@ -426,8 +420,9 @@ onUnmounted(() => {
 
 <style scoped>
 .data-download-container {
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .data-download-content {

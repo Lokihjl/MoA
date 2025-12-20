@@ -7,12 +7,54 @@
         <div class="form-grid">
           <div class="form-group">
             <label for="symbol">股票代码</label>
-            <select id="symbol" v-model="queryParams.symbol">
-              <option value="">请选择股票代码</option>
-              <option v-for="item in symbolsList" :key="item.symbol" :value="item.symbol">
-                {{ item.symbol }} ({{ item.market }})
-              </option>
-            </select>
+            <div class="searchable-select">
+              <div class="select-header">
+                <input 
+                  type="text" 
+                  class="search-input" 
+                  v-model="symbolSearchText" 
+                  placeholder="搜索股票代码或名称..."
+                  @focus="openSelect"
+                  @click="openSelect"
+                />
+                <span 
+                  class="select-arrow" 
+                  :class="{ 'active': isSelectOpen }"
+                  @click="toggleSelect"
+                >▼</span>
+              </div>
+              <div 
+                class="select-dropdown" 
+                :class="{ 'open': isSelectOpen }"
+              >
+                <div class="select-options">
+                  <div 
+                    v-for="item in filteredSymbols" 
+                    :key="item.symbol"
+                    class="select-option"
+                    :class="{ 'selected': queryParams.symbol === item.symbol }"
+                    @click="selectSymbol(item.symbol)"
+                  >
+                    {{ item.symbol }} ({{ stockNameMap[item.symbol] || item.market }})
+                  </div>
+                </div>
+              </div>
+              <!-- 隐藏的select元素，用于表单提交 -->
+              <select 
+                id="symbol" 
+                v-model="queryParams.symbol"
+                class="hidden-select"
+              >
+                <option value="">请选择股票代码</option>
+                <option 
+                  v-for="item in symbolsList" 
+                  :key="item.symbol" 
+                  :value="item.symbol"
+                >
+                  {{ item.symbol }}
+                </option>
+              </select>
+            </div>
           </div>
           <div class="form-group">
             <label for="market">市场类型</label>
@@ -57,6 +99,38 @@
       
       <div class="query-results">
         <h3>查询结果</h3>
+        <!-- 股票基本信息 -->
+        <div class="stock-basic-info" v-if="stockBasicInfo && Object.keys(stockBasicInfo).length > 0">
+          <h4>股票基本信息</h4>
+          <div class="basic-info-grid">
+            <div class="info-item">
+              <span class="info-label">股票名称</span>
+              <span class="info-value">{{ stockBasicInfo.name }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">股票代码</span>
+              <span class="info-value">{{ stockBasicInfo.symbol }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">市场类型</span>
+              <span class="info-value">{{ stockBasicInfo.market }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">当前价格</span>
+              <span class="info-value">{{ stockBasicInfo.currentPrice?.toFixed(2) || '-' }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">涨跌幅</span>
+              <span class="info-value" :class="stockBasicInfo.changePercent >= 0 ? 'positive' : 'negative'">
+                {{ stockBasicInfo.changePercent >= 0 ? '+' : '' }}{{ stockBasicInfo.changePercent?.toFixed(2) || '0' }}%
+              </span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">成交量</span>
+              <span class="info-value">{{ formatVolume(stockBasicInfo.volume || 0) }}</span>
+            </div>
+          </div>
+        </div>
         <div class="results-header">
           <div class="result-info">
             <span v-if="klineData.length > 0">
@@ -223,6 +297,89 @@ const klineData = ref<any[]>([])
 // 原始K线数据（用于排序）
 const originalKlineData = ref<any[]>([])
 
+// 股票基本信息
+const stockBasicInfo = ref<any>({})
+
+// 股票代码搜索文本
+const symbolSearchText = ref('')
+
+// 股票名称映射表
+const stockNameMap = ref<Record<string, string>>({
+  'sh600000': '浦发银行',
+  'sh600036': '招商银行',
+  'sh600519': '贵州茅台',
+  'sh601398': '工商银行',
+  'sh601857': '中国石油',
+  'sh601118': '海南橡胶',
+  'sz000001': '平安银行',
+  'sz000002': '万科A',
+  'sz000858': '五粮液',
+  'sz002415': '海康威视',
+  'sz300750': '宁德时代'
+})
+
+// 过滤后的股票列表
+const filteredSymbols = computed(() => {
+  if (!symbolSearchText.value) {
+    return symbolsList.value
+  }
+  
+  const searchText = symbolSearchText.value.toLowerCase()
+  return symbolsList.value.filter(item => {
+    // 搜索股票代码
+    if (item.symbol.toLowerCase().includes(searchText)) {
+      return true
+    }
+    
+    // 搜索股票名称
+    const stockName = stockNameMap.value[item.symbol]?.toLowerCase() || ''
+    if (stockName.includes(searchText)) {
+      return true
+    }
+    
+    return false
+  })
+})
+
+// 下拉框显示状态
+const isSelectOpen = ref(false)
+
+// 打开下拉框
+const openSelect = () => {
+  isSelectOpen.value = true
+}
+
+// 切换下拉框显示状态
+const toggleSelect = () => {
+  isSelectOpen.value = !isSelectOpen.value
+}
+
+// 选择股票
+const selectSymbol = (symbol: string) => {
+  queryParams.value.symbol = symbol
+  isSelectOpen.value = false
+}
+
+// 点击外部关闭下拉框
+const handleClickOutside = (event: MouseEvent) => {
+  const selectElement = document.querySelector('.searchable-select')
+  const target = event.target as HTMLElement
+  
+  // 检查点击目标是否在搜索选择框内部，或者是箭头元素
+  if (selectElement && !selectElement.contains(target)) {
+    isSelectOpen.value = false
+  }
+}
+
+// 监听点击外部事件
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
 // 加载状态
 const isQuerying = ref(false)
 
@@ -284,7 +441,7 @@ const calculateMA = (data: number[], days: number) => {
 // 初始化K线图
 const initKlineChart = () => {
   if (klineChartRef.value) {
-    console.log('初始化K线图', klineChartRef.value)
+
     // 确保容器有正确的尺寸
     klineChartRef.value.style.width = '100%'
     klineChartRef.value.style.height = '400px'
@@ -393,9 +550,9 @@ const initKlineChart = () => {
 
 // 更新K线图
 const updateKlineChart = () => {
-  console.log('更新K线图', klineChart, klineData.value.length)
+
   if (!klineChart || klineData.value.length === 0) {
-    console.log('跳过更新：', !klineChart, klineData.value.length === 0)
+
     return
   }
   
@@ -491,7 +648,7 @@ const updateKlineChart = () => {
       }
     })
     
-    console.log('K线图数据准备完成', dates.length, candlestickData.length, volumeData.length, series.length - 2, '条均线')
+
     
     // 更新图表配置，使用notMerge: true确保完全替换，包含完整的grid配置
     klineChart.setOption({
@@ -588,7 +745,7 @@ const updateKlineChart = () => {
       series: series
     }, true) // 使用完全替换，确保只显示当前可见的系列
     
-    console.log('K线图更新完成')
+
   } catch (error) {
     console.error('更新K线图出错:', error)
     // 简化错误处理，移除动态import
@@ -702,12 +859,38 @@ const sortData = (key: string) => {
   klineData.value = sortedData
 }
 
+// 获取股票基本信息
+const fetchStockBasicInfo = async (symbol: string, market: string) => {
+  try {
+    // 调用API获取股票基本信息
+    const response = await axios.get('/api/moA/data/stock_basic', {
+      params: {
+        symbol,
+        market
+      }
+    })
+    stockBasicInfo.value = response.data
+  } catch (error) {
+    console.error('获取股票基本信息失败:', error)
+    // 如果获取失败，清空基本信息
+    stockBasicInfo.value = {}
+  }
+}
+
 // 查询数据
 const queryData = async () => {
   isQuerying.value = true
   klineData.value = []
+  stockBasicInfo.value = {}
   
   try {
+    // 销毁现有图表实例，确保切换股票时能重新初始化
+    if (klineChart) {
+
+      klineChart.dispose()
+      klineChart = null
+    }
+    
     // 构建查询参数
     const params: any = {
       data_type: queryParams.value.data_type
@@ -738,20 +921,17 @@ const queryData = async () => {
     sortConfig.value.direction = 'desc'
     klineData.value = [...originalKlineData.value]
     
-    console.log('查询数据完成，共', klineData.value.length, '条记录')
-    
-    // 确保K线图已初始化，如果未初始化则初始化
-    if (!klineChart) {
-      console.log('K线图未初始化，正在初始化')
-      setTimeout(() => {
-        initKlineChart()
-      }, 100)
-    } else {
-      // 更新K线图
-      setTimeout(() => {
-        updateKlineChart()
-      }, 50)
+    // 获取股票基本信息
+    if (queryParams.value.symbol) {
+      await fetchStockBasicInfo(queryParams.value.symbol, queryParams.value.market)
     }
+    
+
+    
+    // 重新初始化K线图
+    setTimeout(() => {
+      initKlineChart()
+    }, 100)
   } catch (error) {
     console.error('查询数据失败:', error)
     alert('查询数据失败')
@@ -827,8 +1007,9 @@ onUnmounted(() => {
 
 <style scoped>
 .data-query-container {
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .data-query-content {
@@ -1119,9 +1300,142 @@ td {
   }
 }
 
+/* 搜索选择框样式 */
+.searchable-select {
+  position: relative;
+  width: 100%;
+}
+
+.select-header {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.search-input {
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid #ddd;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: #666;
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+
+.select-arrow.active {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: none;
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.select-dropdown.open {
+  display: block;
+}
+
+.select-options {
+  padding: 0.5rem 0;
+}
+
+.select-option {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.select-option:hover {
+  background-color: #f0f8ff;
+}
+
+.select-option.selected {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  font-weight: 600;
+}
+
+.hidden-select {
+  display: none;
+}
+
 @media (max-width: 480px) {
   .form-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* 股票基本信息样式 */
+.stock-basic-info {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+
+.stock-basic-info h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #555;
+}
+
+.basic-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.info-label {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 1rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.info-value.positive {
+  color: #e74c3c;
+}
+
+.info-value.negative {
+  color: #27ae60;
 }
 </style>

@@ -70,6 +70,8 @@
   flex-direction: column;
   min-height: 100vh;
   font-family: Arial, sans-serif;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .app-header {
@@ -115,8 +117,10 @@
 
 .app-main {
   flex: 1;
-  padding: 2rem;
+  padding: 1rem;
   background-color: #ecf0f1;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .app-footer {
