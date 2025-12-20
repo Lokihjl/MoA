@@ -75,6 +75,53 @@
             </button>
           </div>
         </div>
+        
+        <!-- 均线设置 -->
+        <div class="ma-settings" v-if="klineData.length > 0">
+          <div class="ma-title">
+            <h4>均线设置</h4>
+          </div>
+          <div class="ma-controls">
+            <!-- 预设均线 -->
+            <div class="preset-mas">
+              <label v-for="ma in presetMAs" :key="ma.days" class="ma-checkbox">
+                <input 
+                  type="checkbox" 
+                  v-model="ma.visible"
+                  @change="updateKlineChart"
+                >
+                <span>{{ ma.name }}</span>
+              </label>
+            </div>
+            
+            <!-- 自定义均线 -->
+            <div class="custom-ma">
+              <label class="ma-checkbox">
+                <input 
+                  type="checkbox" 
+                  v-model="customMA.visible"
+                  @change="updateKlineChart"
+                >
+                <span>自定义均线</span>
+              </label>
+              <input 
+                type="number" 
+                v-model.number="customMA.days"
+                min="1"
+                max="250"
+                @change="updateKlineChart"
+                :disabled="!customMA.visible"
+                placeholder="天数"
+              >
+            </div>
+          </div>
+        </div>
+        
+        <!-- K线图容器 -->
+        <div class="kline-chart-container" v-if="klineData.length > 0">
+          <div ref="klineChartRef" class="kline-chart"></div>
+        </div>
+        
         <div class="results-table">
           <table v-if="klineData.length > 0">
             <thead>
@@ -138,7 +185,7 @@
                 <td>{{ item.low.toFixed(2) }}</td>
                 <td>{{ item.close.toFixed(2) }}</td>
                 <td>{{ formatVolume(item.volume) }}</td>
-                <td>{{ item.amount ? item.amount.toFixed(2) : '-' }}</td>
+                <td>{{ formatAmount(item.amount) }}</td>
               </tr>
             </tbody>
           </table>
@@ -155,8 +202,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
 import axios from 'axios'
+import * as echarts from 'echarts'
 
 // 查询参数
 const queryParams = ref({
@@ -184,6 +232,381 @@ const sortConfig = ref({
   direction: 'desc' // asc: 升序, desc: 降序
 })
 
+// K线图相关
+const klineChartRef = ref<HTMLElement | null>(null)
+let klineChart: echarts.ECharts | null = null
+
+// 均线配置
+interface MAConfig {
+  days: number
+  name: string
+  color: string
+  visible: boolean
+}
+
+// 预设均线配置
+const presetMAs = ref<MAConfig[]>([
+  { days: 5, name: '5日均线', color: '#FF6B6B', visible: true },
+  { days: 10, name: '10日均线', color: '#4ECDC4', visible: true },
+  { days: 20, name: '20日均线', color: '#45B7D1', visible: true },
+  { days: 60, name: '60日均线', color: '#96CEB4', visible: false }
+])
+
+// 自定义均线配置
+const customMA = ref<MAConfig>({
+  days: 30,
+  name: '自定义均线',
+  color: '#FFEAA7',
+  visible: false
+})
+
+// 计算均线数据
+const calculateMA = (data: number[], days: number) => {
+  const result: (number | null)[] = []
+  if (data.length < days) {
+    return result.fill(null, 0, data.length)
+  }
+  
+  for (let i = 0; i < data.length; i++) {
+    if (i < days - 1) {
+      result.push(null)
+    } else {
+      let sum = 0
+      for (let j = i - days + 1; j <= i; j++) {
+        sum += data[j]
+      }
+      result.push(parseFloat((sum / days).toFixed(2)))
+    }
+  }
+  return result
+}
+
+// 初始化K线图
+const initKlineChart = () => {
+  if (klineChartRef.value) {
+    console.log('初始化K线图', klineChartRef.value)
+    // 确保容器有正确的尺寸
+    klineChartRef.value.style.width = '100%'
+    klineChartRef.value.style.height = '400px'
+    
+    klineChart = echarts.init(klineChartRef.value)
+    
+    // 设置默认配置，确保图表显示
+    klineChart.setOption({
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross'
+        }
+      },
+      legend: {
+        data: ['K线', '成交量', ...presetMAs.value.map(ma => ma.name), customMA.value.name]
+      },
+      grid: [
+        {
+          left: '3%',
+          right: '4%',
+          height: '60%'
+        },
+        {
+          left: '3%',
+          right: '4%',
+          top: '70%',
+          height: '20%'
+        }
+      ],
+      xAxis: [
+        {
+          type: 'category',
+          data: [],
+          axisPointer: {
+            type: 'shadow'
+          }
+        },
+        {
+          type: 'category',
+          gridIndex: 1,
+          data: []
+        }
+      ],
+      yAxis: [
+        {
+          scale: true,
+          splitArea: {
+            show: true
+          }
+        },
+        {
+          scale: true,
+          gridIndex: 1,
+          splitNumber: 2,
+          axisLabel: {
+            show: false
+          },
+          axisLine: {
+            show: false
+          },
+          axisTick: {
+            show: false
+          },
+          splitLine: {
+            show: false
+          }
+        }
+      ],
+      series: [
+        {
+          name: 'K线',
+          type: 'candlestick',
+          data: [],
+          itemStyle: {
+            color: '#ef5350',
+            color0: '#26a69a',
+            borderColor: '#ef5350',
+            borderColor0: '#26a69a'
+          }
+        },
+        {
+          name: '成交量',
+          type: 'bar',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          data: [],
+          itemStyle: {
+            color: '#ef5350'
+          }
+        }
+      ]
+    })
+    
+    // 监听窗口大小变化，调整图表大小
+    window.addEventListener('resize', () => {
+      klineChart?.resize()
+    })
+    
+    // 如果已有数据，立即更新图表
+    if (klineData.value.length > 0) {
+      updateKlineChart()
+    }
+  }
+}
+
+// 更新K线图
+const updateKlineChart = () => {
+  console.log('更新K线图', klineChart, klineData.value.length)
+  if (!klineChart || klineData.value.length === 0) {
+    console.log('跳过更新：', !klineChart, klineData.value.length === 0)
+    return
+  }
+  
+  try {
+    // 确保数据按日期排序
+    const sortedData = [...klineData.value].sort((a, b) => {
+      return new Date(a.date).getTime() - new Date(b.date).getTime()
+    })
+    
+    // 准备K线图数据
+    const dates = sortedData.map(item => item.date)
+    const closePrices = sortedData.map(item => parseFloat(item.close.toFixed(2)))
+    
+    const candlestickData = sortedData.map(item => [
+      parseFloat(item.open.toFixed(2)),
+      parseFloat(item.close.toFixed(2)),
+      parseFloat(item.low.toFixed(2)),
+      parseFloat(item.high.toFixed(2))
+    ])
+    
+    const volumeData = sortedData.map(item => {
+      const open = parseFloat(item.open.toFixed(2))
+      const close = parseFloat(item.close.toFixed(2))
+      return {
+        value: item.volume,
+        itemStyle: {
+          color: close >= open ? '#ef5350' : '#26a69a'
+        }
+      }
+    })
+    
+    // 计算所有可见均线数据
+    const allMAs = [...presetMAs.value]
+    if (customMA.value.visible) {
+      allMAs.push(customMA.value)
+    }
+    
+    // 准备series数据，先添加K线和成交量（带唯一ID）
+    const series = [
+      {
+        id: 'kline',
+        name: 'K线',
+        type: 'candlestick',
+        data: candlestickData,
+        itemStyle: {
+          color: '#ef5350',
+          color0: '#26a69a',
+          borderColor: '#ef5350',
+          borderColor0: '#26a69a'
+        }
+      },
+      {
+        id: 'volume',
+        name: '成交量',
+        type: 'bar',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: volumeData
+      }
+    ]
+    
+    // 添加所有可见均线（带唯一ID）
+    allMAs.forEach(ma => {
+      if (ma.visible) {
+        const maData = calculateMA(closePrices, ma.days)
+        series.push({
+          id: `ma_${ma.days}`, // 使用天数作为唯一ID
+          name: ma.name,
+          type: 'line',
+          data: maData,
+          smooth: true,
+          lineStyle: {
+            color: ma.color,
+            width: 1.5
+          },
+          symbol: 'none',
+          sampling: 'lttb',
+          itemStyle: {
+            color: ma.color
+          },
+          areaStyle: {
+            opacity: 0
+          }
+        })
+      }
+    })
+    
+    // 准备图例数据
+    const legendData = ['K线', '成交量']
+    allMAs.forEach(ma => {
+      if (ma.visible) {
+        legendData.push(ma.name)
+      }
+    })
+    
+    console.log('K线图数据准备完成', dates.length, candlestickData.length, volumeData.length, series.length - 2, '条均线')
+    
+    // 更新图表配置，使用notMerge: true确保完全替换，包含完整的grid配置
+    klineChart.setOption({
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross'
+        }
+      },
+      legend: {
+        data: legendData
+      },
+      grid: [
+        {
+          left: '3%',
+          right: '4%',
+          height: '60%'
+        },
+        {
+          left: '3%',
+          right: '4%',
+          top: '70%',
+          height: '20%'
+        }
+      ],
+      xAxis: [
+        {
+          type: 'category',
+          data: dates,
+          axisPointer: {
+            type: 'shadow'
+          },
+          axisLabel: {
+            formatter: (value: string) => {
+              // 格式化日期显示
+              const date = new Date(value)
+              return `${date.getMonth() + 1}/${date.getDate()}`
+            }
+          }
+        },
+        {
+          type: 'category',
+          gridIndex: 1,
+          data: dates,
+          axisLabel: {
+            formatter: (value: string) => {
+              const date = new Date(value)
+              return `${date.getMonth() + 1}/${date.getDate()}`
+            }
+          }
+        }
+      ],
+      yAxis: [
+        {
+          scale: true,
+          splitArea: {
+            show: true
+          }
+        },
+        {
+          scale: true,
+          gridIndex: 1,
+          splitNumber: 2,
+          axisLabel: {
+            show: false
+          },
+          axisLine: {
+            show: false
+          },
+          axisTick: {
+            show: false
+          },
+          splitLine: {
+            show: false
+          }
+        }
+      ],
+      dataZoom: [
+        {
+          type: 'inside',
+          xAxisIndex: [0, 1],
+          start: Math.max(0, 100 - (30 / dates.length) * 100),
+          end: 100
+        },
+        {
+          show: true,
+          xAxisIndex: [0, 1],
+          type: 'slider',
+          bottom: '5%',
+          start: Math.max(0, 100 - (30 / dates.length) * 100),
+          end: 100
+        }
+      ],
+      series: series
+    }, true) // 使用完全替换，确保只显示当前可见的系列
+    
+    console.log('K线图更新完成')
+  } catch (error) {
+    console.error('更新K线图出错:', error)
+    // 简化错误处理，移除动态import
+    console.error(error)
+  }
+}
+
+// 监听K线数据变化，更新图表
+watch(
+  () => klineData.value,
+  (newData) => {
+    if (newData.length > 0) {
+      updateKlineChart()
+    }
+  },
+  { deep: true }
+)
+
 // 格式化日期
 const formatDate = (dateString: string) => {
   if (!dateString) return ''
@@ -199,6 +622,18 @@ const formatVolume = (volume: number) => {
     return (volume / 10000).toFixed(2) + '万'
   } else {
     return volume.toString()
+  }
+}
+
+// 格式化成交额
+const formatAmount = (amount: number) => {
+  if (!amount) return '-'
+  if (amount >= 100000000) {
+    return (amount / 100000000).toFixed(2) + '亿'
+  } else if (amount >= 10000) {
+    return (amount / 10000).toFixed(2) + '万'
+  } else {
+    return amount.toFixed(2)
   }
 }
 
@@ -302,6 +737,21 @@ const queryData = async () => {
     sortConfig.value.key = 'date'
     sortConfig.value.direction = 'desc'
     klineData.value = [...originalKlineData.value]
+    
+    console.log('查询数据完成，共', klineData.value.length, '条记录')
+    
+    // 确保K线图已初始化，如果未初始化则初始化
+    if (!klineChart) {
+      console.log('K线图未初始化，正在初始化')
+      setTimeout(() => {
+        initKlineChart()
+      }, 100)
+    } else {
+      // 更新K线图
+      setTimeout(() => {
+        updateKlineChart()
+      }, 50)
+    }
   } catch (error) {
     console.error('查询数据失败:', error)
     alert('查询数据失败')
@@ -358,6 +808,20 @@ const exportData = () => {
 onMounted(async () => {
   initDateRange()
   await fetchSymbolsList()
+  // 初始化K线图
+  setTimeout(() => {
+    initKlineChart()
+  }, 100)
+})
+
+// 组件卸载时释放资源
+onUnmounted(() => {
+  // 销毁图表实例
+  klineChart?.dispose()
+  // 移除事件监听器
+  window.removeEventListener('resize', () => {
+    klineChart?.resize()
+  })
 })
 </script>
 
@@ -533,6 +997,104 @@ td {
   text-align: center;
   padding: 2rem;
   color: #666;
+}
+
+/* 均线设置样式 */
+.ma-settings {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+
+.ma-title h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: #555;
+}
+
+.ma-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.preset-mas {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.custom-ma {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ma-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #333;
+  user-select: none;
+}
+
+.ma-checkbox input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.custom-ma input[type="number"] {
+  width: 80px;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.custom-ma input[type="number"]:disabled {
+  background-color: #f0f0f0;
+  cursor: not-allowed;
+}
+
+/* K线图样式 */
+.kline-chart-container {
+  margin: 1rem 0;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  background-color: #fafafa;
+}
+
+.kline-chart {
+  width: 100%;
+  height: 400px;
+}
+
+@media (max-width: 768px) {
+  .kline-chart {
+    height: 300px;
+  }
+  
+  .ma-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .preset-mas {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .custom-ma {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
 }
 
 @media (max-width: 1200px) {

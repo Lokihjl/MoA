@@ -16,6 +16,9 @@ class DataDownloadRecord(db.Model):
     end_time = db.Column(db.DateTime, nullable=True)  # 结束时间
     error_message = db.Column(db.Text, nullable=True)  # 错误信息
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # 创建时间
+    total_downloaded = db.Column(db.Integer, nullable=False, default=0)  # 下载的条数
+    total_symbols = db.Column(db.Integer, nullable=False, default=0)  # 处理的股票数量
+    success_symbols = db.Column(db.Integer, nullable=False, default=0)  # 成功获取数据的股票数量
     
     def __repr__(self):
         return f'<DataDownloadRecord {self.id} - {self.market} - {self.status}>'

@@ -24,22 +24,6 @@ interface AlphaStrategyParams {
   nFolds: number
 }
 
-// 定义选股结果类型
-interface SelectedStock {
-  symbol: string
-  name: string
-  score: number
-}
-
-// 定义策略执行结果类型
-interface AlphaStrategyResult {
-  selectedStockCount: number
-  winRate: number
-  totalProfit: number
-  annualProfit: number
-  selectedStocks: SelectedStock[]
-}
-
 // 定义回测参数类型
 interface AlphaStrategyParams {
   initialCash: number

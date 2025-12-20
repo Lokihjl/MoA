@@ -82,6 +82,9 @@
                 <th>股票代码</th>
                 <th>状态</th>
                 <th>进度</th>
+                <th>处理股票数</th>
+                <th>成功股票数</th>
+                <th>下载条数</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -95,7 +98,12 @@
                   <span class="symbols-list">{{ record.symbols.join(', ') }}</span>
                 </td>
                 <td>
-                  <span :class="`status-${record.status}`">{{ getStatusText(record.status) }}</span>
+                  <span :class="`status-${record.status}`">
+                    {{ getStatusText(record.status) }}
+                    <template v-if="record.status === 'completed' && record.total_downloaded === 0">
+                      <span style="color: #f39c12; margin-left: 5px;">(数据空)</span>
+                    </template>
+                  </span>
                 </td>
                 <td>
                   <div class="progress-bar">
@@ -103,6 +111,9 @@
                     <span class="progress-text">{{ record.progress }}%</span>
                   </div>
                 </td>
+                <td>{{ record.total_symbols }}</td>
+                <td>{{ record.success_symbols }}</td>
+                <td>{{ record.total_downloaded }}</td>
                 <td>{{ record.created_at }}</td>
                 <td>
                   <button 
@@ -161,6 +172,9 @@ interface DownloadRecord {
   start_time?: string
   end_time?: string
   error_message?: string
+  total_downloaded: number
+  total_symbols: number
+  success_symbols: number
 }
 
 // 转换市场类型为中文

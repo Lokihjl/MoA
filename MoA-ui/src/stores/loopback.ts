@@ -9,6 +9,19 @@ export interface LoopBackParams {
   sellFactors: any[]
 }
 
+export interface TradeRecord {
+  id: number
+  symbol: string
+  buy_date: string
+  sell_date: string
+  buy_price: number
+  sell_price: number
+  quantity: number
+  profit: number
+  hold_days: number
+  profit_rate: number
+}
+
 export interface LoopBackResult {
   winRate: number
   totalProfit: number
@@ -16,6 +29,8 @@ export interface LoopBackResult {
   sharpeRatio: number
   maxDrawdown: number
   tradesCount: number
+  tradeRecords: TradeRecord[]
+  dataSource: string
 }
 
 export const useLoopBackStore = defineStore('loopback', {
@@ -23,7 +38,7 @@ export const useLoopBackStore = defineStore('loopback', {
     params: {
       initialCash: 1000000,
       nFolds: 2,
-      symbols: ['usAAPL', 'usGOOG', 'usMSFT'],
+      symbols: ['sh600000', 'sh600036', 'sh600519', 'sz000001', 'sz000858'],
       buyFactors: [
         { xd: 42, class: 'AbuFactorBuyBreak' },
         { xd: 60, class: 'AbuFactorBuyBreak' }
@@ -41,8 +56,7 @@ export const useLoopBackStore = defineStore('loopback', {
       this.isLoading = true
       this.error = null
       try {
-        // TODO: Replace with actual API endpoint
-        const response = await axios.post('/api/loopback', this.params)
+        const response = await axios.post('/api/moA/loopback', this.params)
         this.result = response.data
       } catch (err) {
         this.error = '回测失败: ' + (err as Error).message
@@ -55,7 +69,7 @@ export const useLoopBackStore = defineStore('loopback', {
       this.params = {
         initialCash: 1000000,
         nFolds: 2,
-        symbols: ['usAAPL', 'usGOOG', 'usMSFT'],
+        symbols: ['sh600000', 'sh600036', 'sh600519', 'sz000001', 'sz000858'],
         buyFactors: [
           { xd: 42, class: 'AbuFactorBuyBreak' },
           { xd: 60, class: 'AbuFactorBuyBreak' }

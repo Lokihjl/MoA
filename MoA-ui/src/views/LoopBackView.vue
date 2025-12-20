@@ -36,7 +36,7 @@
               type="text" 
               id="symbols" 
               v-model="symbolsText"
-              placeholder="例如：usAAPL,usGOOG,usMSFT"
+              placeholder="例如：sh600000,sh600036,sz000001,sz000858"
             />
           </div>
         </div>
@@ -86,35 +86,88 @@
           <p>{{ store.error }}</p>
         </div>
         
-        <div v-else-if="store.result" class="result-cards">
-          <div class="result-card">
-            <h4>胜率</h4>
-            <p class="result-value">{{ (store.result.winRate * 100).toFixed(2) }}%</p>
+        <div v-else-if="store.result" class="result-content">
+          <!-- 数据来源信息 -->
+          <div class="data-source-info">
+            <span class="label">数据来源：</span>
+            <span class="value">{{ store.result && store.result.dataSource ? store.result.dataSource : 'ABU框架' }}</span>
           </div>
           
-          <div class="result-card">
-            <h4>总收益</h4>
-            <p class="result-value">{{ (store.result.totalProfit * 100).toFixed(2) }}%</p>
+          <!-- 回测统计卡片 -->
+          <div class="result-cards">
+            <div class="result-card">
+              <h4>胜率</h4>
+              <p class="result-value">{{ (store.result.winRate * 100).toFixed(2) }}%</p>
+            </div>
+            
+            <div class="result-card">
+              <h4>总收益</h4>
+              <p class="result-value">{{ (store.result.totalProfit * 100).toFixed(2) }}%</p>
+            </div>
+            
+            <div class="result-card">
+              <h4>年化收益</h4>
+              <p class="result-value">{{ (store.result.annualProfit * 100).toFixed(2) }}%</p>
+            </div>
+            
+            <div class="result-card">
+              <h4>夏普比率</h4>
+              <p class="result-value">{{ store.result.sharpeRatio.toFixed(3) }}</p>
+            </div>
+            
+            <div class="result-card">
+              <h4>最大回撤</h4>
+              <p class="result-value negative">{{ (store.result.maxDrawdown * 100).toFixed(2) }}%</p>
+            </div>
+            
+            <div class="result-card trades-count">
+              <h4>交易次数</h4>
+              <p class="result-value trades-count-value">{{ store.result.tradesCount }}</p>
+            </div>
           </div>
           
-          <div class="result-card">
-            <h4>年化收益</h4>
-            <p class="result-value">{{ (store.result.annualProfit * 100).toFixed(2) }}%</p>
-          </div>
-          
-          <div class="result-card">
-            <h4>夏普比率</h4>
-            <p class="result-value">{{ store.result.sharpeRatio.toFixed(3) }}</p>
-          </div>
-          
-          <div class="result-card">
-            <h4>最大回撤</h4>
-            <p class="result-value negative">{{ (store.result.maxDrawdown * 100).toFixed(2) }}%</p>
-          </div>
-          
-          <div class="result-card">
-            <h4>交易次数</h4>
-            <p class="result-value">{{ store.result.tradesCount }}</p>
+          <!-- 交易记录表格 -->
+          <div class="trade-records-section">
+            <h4>交易记录</h4>
+            <div class="trade-records-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>序号</th>
+                    <th>股票代码</th>
+                    <th>买入日期</th>
+                    <th>卖出日期</th>
+                    <th>持有天数</th>
+                    <th>买入价格</th>
+                    <th>卖出价格</th>
+                    <th>交易数量</th>
+                    <th>利润</th>
+                    <th>利润率</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="record in (store.result.tradeRecords || [])" :key="record.id">
+                    <td>{{ record.id }}</td>
+                    <td>{{ record.symbol }}</td>
+                    <td>{{ record.buy_date }}</td>
+                    <td>{{ record.sell_date }}</td>
+                    <td>{{ record.hold_days }}天</td>
+                    <td>{{ record.buy_price.toFixed(2) }}</td>
+                    <td>{{ record.sell_price.toFixed(2) }}</td>
+                    <td>{{ record.quantity }}</td>
+                    <td :class="record.profit >= 0 ? 'profit-positive' : 'profit-negative'">
+                      {{ record.profit >= 0 ? '+' : '' }}{{ record.profit.toFixed(2) }}
+                    </td>
+                    <td :class="record.profit_rate >= 0 ? 'profit-positive' : 'profit-negative'">
+                      {{ record.profit_rate >= 0 ? '+' : '' }}{{ record.profit_rate.toFixed(2) }}%
+                    </td>
+                  </tr>
+                  <tr v-if="!(store.result.tradeRecords && store.result.tradeRecords.length > 0)">
+                    <td colspan="10" class="no-data">暂无交易记录</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
         
@@ -326,6 +379,118 @@ const symbolsText = computed({
 
 .result-value.negative {
   color: #e74c3c;
+}
+
+/* 交易次数卡片样式，使其更明显 */
+.result-card.trades-count {
+  background-color: #3498db;
+  color: white;
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+}
+
+.result-card.trades-count h4 {
+  color: white;
+}
+
+.result-value.trades-count-value {
+  font-size: 2.5rem;
+  color: white;
+}
+
+/* 数据来源信息样式 */
+.data-source-info {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.data-source-info .label {
+  font-weight: bold;
+  color: #555;
+}
+
+.data-source-info .value {
+  color: #3498db;
+}
+
+/* 交易记录部分样式 */
+.trade-records-section {
+  margin-top: 2rem;
+  background-color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.trade-records-section h4 {
+  margin: 0 0 1.5rem 0;
+  color: #2c3e50;
+  font-size: 1.2rem;
+}
+
+/* 交易记录表格样式 */
+.trade-records-table {
+  overflow-x: auto;
+}
+
+.trade-records-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.trade-records-table th {
+  background-color: #f8f9fa;
+  color: #555;
+  font-weight: 600;
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 2px solid #dee2e6;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trade-records-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e9ecef;
+  color: #333;
+}
+
+.trade-records-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* 利润样式 */
+.profit-positive {
+  color: #27ae60;
+  font-weight: 600;
+}
+
+.profit-negative {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+/* 无数据样式 */
+.no-data {
+  text-align: center;
+  color: #666;
+  padding: 2rem;
+  font-style: italic;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .trade-records-table {
+    font-size: 0.8rem;
+  }
+  
+  .trade-records-table th,
+  .trade-records-table td {
+    padding: 0.5rem;
+  }
 }
 
 .empty-results {

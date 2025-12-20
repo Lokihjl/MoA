@@ -124,6 +124,12 @@ def create_data_download():
                 
                 # 解析新浪财经返回的JSON数据
                 sina_data = response.json()
+                
+                # 检查新浪财经API返回数据是否为None
+                if sina_data is None:
+                    print(f'新浪财经API返回数据为None')
+                    return None
+                
                 print(f'新浪财经API返回数据长度: {len(sina_data)}')
                 
                 if not sina_data:
@@ -136,10 +142,21 @@ def create_data_download():
                 
                 # 转换数据类型
                 numeric_cols = ['open', 'high', 'low', 'close', 'volume']
+                
+                # 检查是否包含成交额字段
+                if 'amount' in kl_df.columns:
+                    numeric_cols.append('amount')
+                elif 'turnover' in kl_df.columns:
+                    numeric_cols.append('turnover')
+                
                 kl_df[numeric_cols] = kl_df[numeric_cols].astype(float)
                 
                 # 重命名列，保持与ABU框架一致
-                kl_df.rename(columns={'volume': 'volume'}, inplace=True)
+                kl_df.rename(columns={'volume': 'volume', 'turnover': 'amount'}, inplace=True)
+                
+                # 如果没有成交额字段，添加一个默认值
+                if 'amount' not in kl_df.columns:
+                    kl_df['amount'] = kl_df['volume'] * kl_df['close']  # 成交额 = 成交量 * 收盘价
                 
                 # 添加ATR21列（简单计算，实际应该使用TA-Lib）
                 kl_df['atr21'] = 0.0
@@ -207,6 +224,13 @@ def create_data_download():
                     # 调试：打印股票列表信息
                     print(f"准备处理{total_symbols}只股票：{symbols[:10]}...")
                     
+                    # 统计成功获取数据的股票数量
+                    success_count = 0
+                    
+                    # 更新下载记录的股票数量信息
+                    current_record.total_symbols = total_symbols
+                    db.session.commit()
+                    
                     for index, symbol in enumerate(symbols):
                         try:
                             # 重新获取会话，确保会话有效
@@ -237,6 +261,7 @@ def create_data_download():
                                 # 保存到SQLite数据库
                                 records_saved = save_kl_data_to_db(kl_df, symbol, current_record.market, current_record.data_type)
                                 total_records += records_saved
+                                success_count += 1
                                 
                                 # 重新获取会话，确保会话有效
                                 current_record = db.session.query(DataDownloadRecord).filter_by(id=download_record.id).first()
@@ -265,7 +290,14 @@ def create_data_download():
                         current_record.progress = 100
                         current_record.status = 'completed'
                         current_record.end_time = datetime.utcnow()
-                        current_record.error_message = f'成功完成下载任务：共处理{total_symbols}只股票，保存{total_records}条K线数据到SQLite数据库'
+                        current_record.total_downloaded = total_records
+                        current_record.success_symbols = success_count
+                        
+                        # 根据下载结果设置不同的错误消息
+                        if total_records == 0:
+                            current_record.error_message = f'下载完成，但未获取到任何有效数据：共处理{total_symbols}只股票，成功{success_count}只，保存{total_records}条K线数据'
+                        else:
+                            current_record.error_message = f'成功完成下载任务：共处理{total_symbols}只股票，成功{success_count}只，保存{total_records}条K线数据到SQLite数据库'
                         db.session.commit()
                 except Exception as e:
                     # 下载失败
@@ -338,7 +370,10 @@ def get_data_download_records():
                 'start_time': record.start_time.strftime('%Y-%m-%d %H:%M:%S') if record.start_time else None,
                 'end_time': record.end_time.strftime('%Y-%m-%d %H:%M:%S') if record.end_time else None,
                 'error_message': record.error_message,
-                'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'total_downloaded': record.total_downloaded,
+                'total_symbols': record.total_symbols,
+                'success_symbols': record.success_symbols
             })
         
         return jsonify(result), 200
@@ -366,7 +401,10 @@ def get_data_download_record(record_id):
             'start_time': record.start_time.strftime('%Y-%m-%d %H:%M:%S') if record.start_time else None,
             'end_time': record.end_time.strftime('%Y-%m-%d %H:%M:%S') if record.end_time else None,
             'error_message': record.error_message,
-            'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'total_downloaded': record.total_downloaded,
+            'total_symbols': record.total_symbols,
+            'success_symbols': record.success_symbols
         }
         
         return jsonify(result), 200
