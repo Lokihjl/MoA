@@ -1,6 +1,6 @@
 <template>
-  <div class="price-channel-container">
-    <h2>价格通道分析</h2>
+  <div class="displacement-ratio-container">
+    <h2>位移路程比分析</h2>
     
     <div class="tabs">
       <button 
@@ -14,9 +14,9 @@
     </div>
     
     <div class="tab-content">
-      <!-- 单个股票价格通道 -->
+      <!-- 单个股票位移路程比 -->
       <div v-if="activeTab === 'single'" class="tab-pane">
-        <h3>单个股票价格通道分析</h3>
+        <h3>单个股票位移路程比分析</h3>
         <div class="form-section">
           <div class="form-grid">
             <div class="form-group">
@@ -71,14 +71,6 @@
               </div>
             </div>
             <div class="form-group">
-              <label for="single-channel-type">通道类型</label>
-              <select id="single-channel-type" v-model="singleParams.channel_type">
-                <option value="regress">拟合通道</option>
-                <option value="skeleton">骨架通道</option>
-                <option value="support">支撑阻力通道</option>
-              </select>
-            </div>
-            <div class="form-group">
               <label for="single-n-folds">数据周期（年）</label>
               <input 
                 type="number" 
@@ -89,46 +81,63 @@
                 step="1"
               />
             </div>
+            <div class="form-group">
+              <label for="single-window">计算窗口（天）</label>
+              <input 
+                type="number" 
+                id="single-window" 
+                v-model.number="singleParams.window" 
+                min="5" 
+                max="100"
+                step="5"
+              />
+            </div>
           </div>
           <div class="buttons-group">
             <button 
               class="btn-primary" 
-              @click="getSinglePriceChannel" 
+              @click="getSingleDisplacementRatio" 
               :disabled="isLoading"
             >
-              {{ isLoading ? '计算中...' : '计算价格通道' }}
+              {{ isLoading ? '计算中...' : '计算位移路程比' }}
             </button>
           </div>
         </div>
         
         <div v-if="singleResult" class="result-section">
-          <h4>价格通道分析结果</h4>
+          <h4>位移路程比分析结果</h4>
           <div class="result-card">
             <div class="result-item">
               <span class="label">股票代码：</span>
               <span class="value">{{ singleResult.symbol }}</span>
             </div>
             <div class="result-item">
-              <span class="label">通道类型：</span>
-              <span class="value">{{ channelTypeLabelMap[singleResult.channel_type] }}</span>
+              <span class="label">数据周期：</span>
+              <span class="value">{{ singleResult.n_folds }} 年</span>
             </div>
             <div class="result-item">
-              <span class="label">数据点数量：</span>
-              <span class="value">{{ singleResult.close.length }}</span>
+              <span class="label">计算窗口：</span>
+              <span class="value">{{ singleResult.window }} 天</span>
             </div>
           </div>
           
-          <!-- 价格通道图表 -->
+          <!-- 不同窗口大小的DDR对比 -->
           <div class="chart-section">
-            <h4>价格通道可视化</h4>
-            <div ref="channelChartRef" class="chart-container"></div>
+            <h4>不同窗口大小的位移路程比</h4>
+            <div ref="windowChartRef" class="chart-container"></div>
+          </div>
+          
+          <!-- 位移路程比时间序列 -->
+          <div class="chart-section">
+            <h4>位移路程比时间序列</h4>
+            <div ref="ddrChartRef" class="chart-container"></div>
           </div>
         </div>
       </div>
       
-      <!-- 多只股票价格通道比较 -->
+      <!-- 多只股票位移路程比比较 -->
       <div v-else-if="activeTab === 'compare'" class="tab-pane">
-        <h3>多只股票价格通道比较</h3>
+        <h3>多只股票位移路程比比较</h3>
         <div class="form-section">
           <div class="form-grid">
             <div class="form-group full-width">
@@ -141,13 +150,6 @@
               ></textarea>
             </div>
             <div class="form-group">
-              <label for="compare-channel-type">通道类型</label>
-              <select id="compare-channel-type" v-model="compareParams.channel_type">
-                <option value="regress">拟合通道</option>
-                <option value="skeleton">骨架通道</option>
-              </select>
-            </div>
-            <div class="form-group">
               <label for="compare-n-folds">数据周期（年）</label>
               <input 
                 type="number" 
@@ -158,38 +160,57 @@
                 step="1"
               />
             </div>
+            <div class="form-group">
+              <label for="compare-window">计算窗口（天）</label>
+              <input 
+                type="number" 
+                id="compare-window" 
+                v-model.number="compareParams.window" 
+                min="5" 
+                max="100"
+                step="5"
+              />
+            </div>
           </div>
           <div class="buttons-group">
             <button 
               class="btn-primary" 
-              @click="getComparePriceChannel" 
+              @click="getCompareDisplacementRatio" 
               :disabled="isLoading"
             >
-              {{ isLoading ? '计算中...' : '计算多股价格通道比较' }}
+              {{ isLoading ? '计算中...' : '计算多股位移路程比' }}
             </button>
           </div>
         </div>
         
         <div v-if="compareResult" class="result-section">
-          <h4>多只股票价格通道比较结果</h4>
+          <h4>多只股票位移路程比比较结果</h4>
           <div class="result-item">
-            <span class="label">通道类型：</span>
-            <span class="value">{{ channelTypeLabelMap[compareResult.channel_type] }}</span>
+            <span class="label">计算窗口：</span>
+            <span class="value">{{ compareResult.window }} 天</span>
+          </div>
+          <div class="chart-section">
+            <h4>不同周期位移路程比对比</h4>
+            <div ref="compareChartRef" class="chart-container"></div>
           </div>
           <div class="result-table-container">
             <table class="result-table">
               <thead>
                 <tr>
                   <th>股票代码</th>
-                  <th>通道宽度 (%)</th>
-                  <th>数据点</th>
+                  <th>短期DDR (20天)</th>
+                  <th>中期DDR (60天)</th>
+                  <th>长期DDR (120天)</th>
+                  <th>平均DDR</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="result in compareResult.results" :key="result.symbol">
                   <td>{{ result.symbol }}</td>
-                  <td>{{ result.channel_width.toFixed(4) }}</td>
-                  <td>{{ result.data_points }}</td>
+                  <td>{{ result.short_term_ddr.toFixed(4) }}</td>
+                  <td>{{ result.medium_term_ddr.toFixed(4) }}</td>
+                  <td>{{ result.long_term_ddr.toFixed(4) }}</td>
+                  <td>{{ result.avg_ddr.toFixed(4) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -216,36 +237,34 @@ const error = ref('');
 
 // 标签页配置
 const tabs = [
-  { id: 'single', name: '单个股票通道' },
+  { id: 'single', name: '单个股票DDR' },
   { id: 'compare', name: '多只股票比较' }
 ];
-
-// 通道类型标签映射
-const channelTypeLabelMap = {
-  'regress': '拟合通道',
-  'skeleton': '骨架通道',
-  'support': '支撑阻力通道'
-};
 
 // 单个股票参数
 const singleParams = ref({
   symbol: '',
-  channel_type: 'regress',
-  n_folds: 2
+  n_folds: 2,
+  window: 20
 });
 const singleResult = ref<any>(null);
 
 // 多只股票参数
 const compareParams = ref({
   symbolsText: '',
-  channel_type: 'regress',
-  n_folds: 2
+  n_folds: 2,
+  window: 20
 });
 const compareResult = ref<any>(null);
 
 // 图表引用
-const channelChartRef = ref<HTMLElement | null>(null);
-let channelChart: echarts.ECharts | null = null;
+const windowChartRef = ref<HTMLElement | null>(null);
+const ddrChartRef = ref<HTMLElement | null>(null);
+const compareChartRef = ref<HTMLElement | null>(null);
+
+let windowChart: echarts.ECharts | null = null;
+let ddrChart: echarts.ECharts | null = null;
+let compareChart: echarts.ECharts | null = null;
 
 // API请求函数
 const fetchApi = async (url: string, options: any = {}) => {
@@ -275,8 +294,8 @@ const fetchApi = async (url: string, options: any = {}) => {
   }
 };
 
-// 获取单个股票价格通道分析
-const getSinglePriceChannel = async () => {
+// 获取单个股票位移路程比分析
+const getSingleDisplacementRatio = async () => {
   if (!singleParams.value.symbol) {
     error.value = '请选择股票代码';
     return;
@@ -285,23 +304,24 @@ const getSinglePriceChannel = async () => {
   try {
     const params = new URLSearchParams({
       symbol: singleParams.value.symbol,
-      channel_type: singleParams.value.channel_type,
-      n_folds: singleParams.value.n_folds.toString()
+      n_folds: singleParams.value.n_folds.toString(),
+      window: singleParams.value.window.toString()
     });
     
-    const result = await fetchApi(`/api/moA/price-channel/single?${params}`);
+    const result = await fetchApi(`/api/moA/displacement-ratio/single?${params}`);
     singleResult.value = result;
     
-    // 绘制价格通道图表
+    // 绘制图表
     await nextTick();
-    drawChannelChart(result);
+    drawWindowChart(result);
+    drawDDRChart(result);
   } catch (err) {
-    console.error('获取单个股票价格通道分析失败:', err);
+    console.error('获取单个股票位移路程比分析失败:', err);
   }
 };
 
-// 获取多只股票价格通道比较
-const getComparePriceChannel = async () => {
+// 获取多只股票位移路程比比较
+const getCompareDisplacementRatio = async () => {
   if (!compareParams.value.symbolsText) {
     error.value = '请输入股票代码列表';
     return;
@@ -318,161 +338,43 @@ const getComparePriceChannel = async () => {
       return;
     }
     
-    const result = await fetchApi('/api/moA/price-channel/compare', {
+    const result = await fetchApi('/api/moA/displacement-ratio/compare', {
       method: 'POST',
       body: JSON.stringify({
         symbols: symbols,
-        channel_type: compareParams.value.channel_type,
-        n_folds: compareParams.value.n_folds
+        n_folds: compareParams.value.n_folds,
+        window: compareParams.value.window
       })
     });
     
     compareResult.value = result;
+    
+    // 绘制比较图表
+    await nextTick();
+    drawCompareChart(result);
   } catch (err) {
-    console.error('获取多只股票价格通道比较失败:', err);
+    console.error('获取多只股票位移路程比比较失败:', err);
   }
 };
 
-// 绘制价格通道图表
-const drawChannelChart = (result: any) => {
-  if (!channelChartRef.value) return;
+// 绘制不同窗口大小的DDR对比图表
+const drawWindowChart = (result: any) => {
+  if (!windowChartRef.value) return;
   
   // 初始化图表
-  if (!channelChart) {
-    channelChart = echarts.init(channelChartRef.value);
+  if (!windowChart) {
+    windowChart = echarts.init(windowChartRef.value);
   }
   
   // 准备数据
-  const dates = result.dates.map((x: number, index: number) => {
-    const date = new Date(x);
-    return date.toLocaleDateString();
-  });
-  
-  const series = [
-    {
-      name: '实际价格',
-      type: 'line',
-      data: result.close,
-      smooth: true,
-      lineStyle: {
-        width: 2,
-        color: '#409eff'
-      },
-      itemStyle: {
-        color: '#409eff'
-      }
-    }
-  ];
-  
-  // 添加通道线
-  if (result.channel) {
-    if (result.channel.middle) {
-      series.push({
-        name: '中轨',
-        type: 'line',
-        data: result.channel.middle,
-        smooth: true,
-        lineStyle: {
-          width: 2,
-          color: '#67c23a',
-          type: 'solid'
-        },
-        itemStyle: {
-          color: '#67c23a'
-        },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(103, 194, 58, 0.2)' },
-              { offset: 1, color: 'rgba(103, 194, 58, 0.05)' }
-            ]
-          }
-        }
-      });
-    }
-    
-    if (result.channel.lower) {
-      series.push({
-        name: '下轨',
-        type: 'line',
-        data: result.channel.lower,
-        smooth: true,
-        lineStyle: {
-          width: 2,
-          color: '#f56c6c',
-          type: 'dashed'
-        },
-        itemStyle: {
-          color: '#f56c6c'
-        }
-      });
-    }
-    
-    if (result.channel.upper) {
-      series.push({
-        name: '上轨',
-        type: 'line',
-        data: result.channel.upper,
-        smooth: true,
-        lineStyle: {
-          width: 2,
-          color: '#f56c6c',
-          type: 'dashed'
-        },
-        itemStyle: {
-          color: '#f56c6c'
-        }
-      });
-    }
-  }
-  
-  // 支撑阻力通道
-  if (result.support_pos && result.resistance_pos) {
-    // 绘制支撑位
-    const supportData = [];
-    for (const pos of result.support_pos) {
-      if (pos >= 0 && pos < result.close.length) {
-        supportData.push([dates[pos], result.close[pos]]);
-      }
-    }
-    
-    series.push({
-      name: '支撑位',
-      type: 'scatter',
-      data: supportData.map(item => [item[0], item[1]]),
-      itemStyle: {
-        color: '#67c23a',
-        size: 6
-      }
-    });
-    
-    // 绘制阻力位
-    const resistanceData = [];
-    for (const pos of result.resistance_pos) {
-      if (pos >= 0 && pos < result.close.length) {
-        resistanceData.push([dates[pos], result.close[pos]]);
-      }
-    }
-    
-    series.push({
-      name: '阻力位',
-      type: 'scatter',
-      data: resistanceData.map(item => [item[0], item[1]]),
-      itemStyle: {
-        color: '#f56c6c',
-        size: 6
-      }
-    });
-  }
+  const windowSizes = result.ddr_results.map((item: any) => item.window_size);
+  const avgDdr = result.ddr_results.map((item: any) => item.avg_ddr);
+  const maxDdr = result.ddr_results.map((item: any) => item.max_ddr);
+  const minDdr = result.ddr_results.map((item: any) => item.min_ddr);
   
   const option = {
     title: {
-      text: `${result.symbol} ${channelTypeLabelMap[result.channel_type]}`,
+      text: `${result.symbol} 不同窗口大小的位移路程比`,
       left: 'center'
     },
     tooltip: {
@@ -485,7 +387,7 @@ const drawChannelChart = (result: any) => {
       }
     },
     legend: {
-      data: series.map(item => item.name),
+      data: ['平均DDR', '最大DDR', '最小DDR'],
       top: 30
     },
     grid: {
@@ -501,16 +403,255 @@ const drawChannelChart = (result: any) => {
     },
     xAxis: {
       type: 'category',
-      boundaryGap: false,
-      data: dates
+      data: windowSizes,
+      name: '窗口大小（天）',
+      nameLocation: 'middle',
+      nameGap: 30
     },
     yAxis: {
-      type: 'value'
+      type: 'value',
+      name: '位移路程比',
+      min: 0,
+      max: 1
     },
-    series: series
+    series: [
+      {
+        name: '平均DDR',
+        type: 'line',
+        data: avgDdr,
+        smooth: true,
+        lineStyle: {
+          width: 2,
+          color: '#409eff'
+        },
+        itemStyle: {
+          color: '#409eff'
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
+              { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }
+            ]
+          }
+        }
+      },
+      {
+        name: '最大DDR',
+        type: 'line',
+        data: maxDdr,
+        smooth: true,
+        lineStyle: {
+          width: 2,
+          color: '#67c23a',
+          type: 'dashed'
+        },
+        itemStyle: {
+          color: '#67c23a'
+        }
+      },
+      {
+        name: '最小DDR',
+        type: 'line',
+        data: minDdr,
+        smooth: true,
+        lineStyle: {
+          width: 2,
+          color: '#f56c6c',
+          type: 'dashed'
+        },
+        itemStyle: {
+          color: '#f56c6c'
+        }
+      }
+    ]
   };
   
-  channelChart.setOption(option);
+  windowChart.setOption(option);
+};
+
+// 绘制位移路程比时间序列图表
+const drawDDRChart = (result: any) => {
+  if (!ddrChartRef.value) return;
+  
+  // 初始化图表
+  if (!ddrChart) {
+    ddrChart = echarts.init(ddrChartRef.value);
+  }
+  
+  // 准备数据
+  const dates = result.specified_ddr_list.map((item: any) => {
+    const date = new Date(item.date);
+    return date.toLocaleDateString();
+  });
+  const ddrValues = result.specified_ddr_list.map((item: any) => item.ddr);
+  
+  const option = {
+    title: {
+      text: `${result.symbol} 位移路程比时间序列 (${result.window}天窗口)`,
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'cross',
+        label: {
+          backgroundColor: '#6a7985'
+        }
+      }
+    },
+    legend: {
+      data: ['位移路程比'],
+      top: 30
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '15%',
+      containLabel: true
+    },
+    toolbox: {
+      feature: {
+        saveAsImage: {}
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      name: '日期',
+      nameLocation: 'middle',
+      nameGap: 40,
+      axisLabel: {
+        rotate: 45
+      }
+    },
+    yAxis: {
+      type: 'value',
+      name: '位移路程比',
+      min: 0,
+      max: 1
+    },
+    series: [
+      {
+        name: '位移路程比',
+        type: 'line',
+        data: ddrValues,
+        smooth: true,
+        lineStyle: {
+          width: 2,
+          color: '#409eff'
+        },
+        itemStyle: {
+          color: '#409eff'
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
+              { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }
+            ]
+          }
+        }
+      }
+    ]
+  };
+  
+  ddrChart.setOption(option);
+};
+
+// 绘制多只股票位移路程比比较图表
+const drawCompareChart = (result: any) => {
+  if (!compareChartRef.value) return;
+  
+  // 初始化图表
+  if (!compareChart) {
+    compareChart = echarts.init(compareChartRef.value);
+  }
+  
+  // 准备数据
+  const symbols = result.results.map((item: any) => item.symbol);
+  const shortTerm = result.results.map((item: any) => item.short_term_ddr);
+  const mediumTerm = result.results.map((item: any) => item.medium_term_ddr);
+  const longTerm = result.results.map((item: any) => item.long_term_ddr);
+  
+  const option = {
+    title: {
+      text: '多只股票不同周期位移路程比对比',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    legend: {
+      data: ['短期 (20天)', '中期 (60天)', '长期 (120天)'],
+      top: 30
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    toolbox: {
+      feature: {
+        saveAsImage: {}
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: symbols,
+      name: '股票代码',
+      nameLocation: 'middle',
+      nameGap: 40
+    },
+    yAxis: {
+      type: 'value',
+      name: '位移路程比',
+      min: 0,
+      max: 1
+    },
+    series: [
+      {
+        name: '短期 (20天)',
+        type: 'bar',
+        data: shortTerm,
+        itemStyle: {
+          color: '#409eff'
+        }
+      },
+      {
+        name: '中期 (60天)',
+        type: 'bar',
+        data: mediumTerm,
+        itemStyle: {
+          color: '#67c23a'
+        }
+      },
+      {
+        name: '长期 (120天)',
+        type: 'bar',
+        data: longTerm,
+        itemStyle: {
+          color: '#f56c6c'
+        }
+      }
+    ]
+  };
+  
+  compareChart.setOption(option);
 };
 
 // ========== 股票选择相关功能 ==========
@@ -633,8 +774,14 @@ const fetchSymbolsList = async () => {
 
 // 窗口大小变化时调整图表大小
 const handleResize = () => {
-  if (channelChart) {
-    channelChart.resize();
+  if (windowChart) {
+    windowChart.resize();
+  }
+  if (ddrChart) {
+    ddrChart.resize();
+  }
+  if (compareChart) {
+    compareChart.resize();
   }
 };
 
@@ -648,9 +795,17 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
   window.removeEventListener('resize', handleResize);
-  if (channelChart) {
-    channelChart.dispose();
-    channelChart = null;
+  if (windowChart) {
+    windowChart.dispose();
+    windowChart = null;
+  }
+  if (ddrChart) {
+    ddrChart.dispose();
+    ddrChart = null;
+  }
+  if (compareChart) {
+    compareChart.dispose();
+    compareChart = null;
   }
 });
 
@@ -658,14 +813,24 @@ onUnmounted(() => {
 watch(() => singleResult.value, (newVal) => {
   if (newVal) {
     nextTick(() => {
-      drawChannelChart(newVal);
+      drawWindowChart(newVal);
+      drawDDRChart(newVal);
+    });
+  }
+});
+
+// 监听compareResult变化，重新绘制图表
+watch(() => compareResult.value, (newVal) => {
+  if (newVal) {
+    nextTick(() => {
+      drawCompareChart(newVal);
     });
   }
 });
 </script>
 
 <style scoped>
-.price-channel-container {
+.displacement-ratio-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;

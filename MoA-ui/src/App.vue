@@ -1,6 +1,7 @@
 <template>
   <div class="app-container">
     <header class="app-header">
+      <!-- <h1>MoA</h1> -->
       <h1>魔A</h1>
     </header>
     <nav class="app-nav">
@@ -62,7 +63,7 @@
       <router-view />
     </main>
     <footer class="app-footer">
-      <p>魔A © 2025</p>
+      <p>MoA © 2025</p>
     </footer>
   </div>
 </template>
@@ -130,10 +131,20 @@
 
 .app-header h1 {
   margin: 0;
-  font-size: 2.5rem;
-  font-weight: 700;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 3rem;
+  font-weight: 800;
+  text-shadow: 0 3px 6px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.3);
   animation: fadeInDown 0.8s ease-out;
+  letter-spacing: 0.1em;
+  background: linear-gradient(135deg, #ffffff, #e0f7fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
 }
 
 /* 导航栏样式 */

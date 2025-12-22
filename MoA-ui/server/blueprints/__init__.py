@@ -15,3 +15,7 @@ from . import trend_speed
 from . import golden_section
 from . import price_change
 from . import ml_strategy
+from . import correlation
+from . import linear_fit
+from . import price_channel
+from . import displacement_ratio

@@ -29,11 +29,6 @@ const router = createRouter({
       component: () => import('../views/TrendSpeedView.vue')
     },
     {
-      path: '/distance-ratio',
-      name: 'distance-ratio',
-      component: () => import('../views/DistanceRatioView.vue')
-    },
-    {
       path: '/linear-fit',
       name: 'linear-fit',
       component: () => import('../views/LinearFitView.vue')
@@ -92,6 +87,11 @@ const router = createRouter({
       path: '/ml-strategy',
       name: 'ml-strategy',
       component: () => import('../views/MLStrategyView.vue')
+    },
+    {
+      path: '/distance-ratio',
+      name: 'distance-ratio',
+      component: () => import('../views/DisplacementRatioView.vue')
     }
   ]
 })

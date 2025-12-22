@@ -25,6 +25,16 @@
   - 智能选股：从多个备选股票中筛选出有潜力的股票
   - 动态止盈止损：根据模型预测结果调整止盈止损参数
 
+### 分析功能
+- 📊 **涨跌幅分析**：分析单个、多只或市场整体的涨跌幅情况
+- 🔗 **相关性分析**：计算和可视化股票之间的相关性
+- 📈 **线性拟合分析**：对股票价格进行线性和多项式拟合，预测未来趋势
+- 📉 **价格通道分析**：分析股票价格的上下通道，识别支撑和阻力位
+- 📐 **黄金分割分析**：基于黄金分割理论分析股票价格支撑位和阻力位
+- ⚡ **趋势敏感速度**：分析股票价格趋势的变化速度
+- 🎯 **位移路程比**：分析股票价格变化的效率，识别趋势的强度和持续性
+- 📏 **跳空缺口分析**：识别和分析股票价格的跳空缺口
+
 ### 其他功能
 - 📱 **响应式设计**：适配各种设备
 - 📝 **Swagger 文档**：完整的 API 文档
@@ -99,33 +109,44 @@
 MoA-ui/
 ├── server/                  # 后端代码
 │   ├── blueprints/          # Flask 蓝图
-│   │   ├── alpha_strategy.py    # Alpha 策略
-│   │   ├── data.py              # 数据下载和查询
-│   │   ├── stock.py             # 股票信息
-│   │   ├── loopback.py           # 回测功能
-│   │   ├── price_change.py       # 涨跌幅分析
-│   │   ├── gap.py                # 跳空缺口分析
-│   │   ├── trend_speed.py        # 趋势速度分析
-│   │   ├── golden_section.py     # 黄金分割分析
-│   │   └── ml_strategy.py        # 机器学习策略
+│   │   ├── alpha_strategy.py       # Alpha 策略
+│   │   ├── correlation.py           # 相关性分析
+│   │   ├── data.py                  # 数据下载和查询
+│   │   ├── displacement_ratio.py    # 位移路程比分析
+│   │   ├── gap.py                   # 跳空缺口分析
+│   │   ├── golden_section.py        # 黄金分割分析
+│   │   ├── linear_fit.py            # 线性拟合分析
+│   │   ├── loopback.py              # 回测功能
+│   │   ├── ml_strategy.py           # 机器学习策略
+│   │   ├── price_change.py          # 涨跌幅分析
+│   │   ├── price_channel.py         # 价格通道分析
+│   │   ├── stock.py                 # 股票信息
+│   │   ├── strategy.py              # 策略管理
+│   │   └── trend_speed.py           # 趋势速度分析
 │   ├── config/              # 配置文件
 │   ├── models/              # 数据库模型
 │   ├── utils/               # 工具函数
 │   └── app.py               # 应用入口
 ├── src/                     # 前端代码
 │   ├── views/               # 页面组件
-│   │   ├── DataDownloadView.vue      # 数据下载
-│   │   ├── DataQueryView.vue         # 数据查询
-│   │   ├── AlphaStrategyView.vue     # Alpha 策略
-│   │   ├── StockInfoView.vue         # 股票信息
-│   │   ├── ChangeAnalysisView.vue    # 涨跌幅分析
-│   │   ├── GapAnalysisView.vue       # 跳空缺口分析
-│   │   ├── TrendSpeedView.vue        # 趋势速度分析
-│   │   ├── GoldenSectionView.vue     # 黄金分割分析
-│   │   ├── ResistanceSupportView.vue # 阻力位支撑位
-│   │   ├── LoopBackView.vue          # 历史回测
-│   │   ├── PriceChangeView.vue       # 价格变化分析
-│   │   └── MLStrategyView.vue        # 机器学习策略
+│   │   ├── AlphaStrategyView.vue        # Alpha 策略
+│   │   ├── ChangeAnalysisView.vue       # 涨跌幅分析
+│   │   ├── CorrelationView.vue          # 相关性分析
+│   │   ├── DataDownloadView.vue         # 数据下载
+│   │   ├── DataQueryView.vue            # 数据查询
+│   │   ├── DisplacementRatioView.vue    # 位移路程比分析
+│   │   ├── FinanceApiTestView.vue       # 财经API测试
+│   │   ├── GapAnalysisView.vue          # 跳空缺口分析
+│   │   ├── GoldenSectionView.vue        # 黄金分割分析
+│   │   ├── HomeView.vue                 # 首页
+│   │   ├── LinearFitView.vue            # 线性拟合分析
+│   │   ├── LoopBackView.vue             # 历史回测
+│   │   ├── MLStrategyView.vue           # 机器学习策略
+│   │   ├── PriceChangeView.vue          # 价格变化分析
+│   │   ├── PriceChannelView.vue         # 价格通道分析
+│   │   ├── ResistanceSupportView.vue    # 阻力位支撑位
+│   │   ├── StockInfoView.vue            # 股票信息
+│   │   └── TrendSpeedView.vue           # 趋势速度分析
 │   ├── components/          # 通用组件
 │   ├── stores/              # 状态管理
 │   ├── router/              # 路由配置
