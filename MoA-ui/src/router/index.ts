@@ -87,6 +87,11 @@ const router = createRouter({
       path: '/price-change',
       name: 'price-change',
       component: () => import('../views/PriceChangeView.vue')
+    },
+    {
+      path: '/ml-strategy',
+      name: 'ml-strategy',
+      component: () => import('../views/MLStrategyView.vue')
     }
   ]
 })

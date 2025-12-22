@@ -53,6 +53,9 @@
         <li>
           <router-link to="/alpha-strategy">Alpha策略</router-link>
         </li>
+        <li>
+          <router-link to="/ml-strategy">机器学习策略</router-link>
+        </li>
       </ul>
     </nav>
     <main class="app-main">

@@ -14,3 +14,4 @@ from . import gap
 from . import trend_speed
 from . import golden_section
 from . import price_change
+from . import ml_strategy

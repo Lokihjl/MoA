@@ -20,6 +20,10 @@
 - 🚀 **Alpha 策略**：基于 abupy 核心模块实现 Alpha 因子策略
 - 🔄 **策略回测**：支持多种策略的历史回测
 - 📋 **策略报告**：生成详细的策略回测报告
+- 🤖 **机器学习策略**：集成多种机器学习算法，支持智能选股和动态止盈止损
+  - 支持随机森林、XGBoost、SVC、KNN、决策树等多种算法
+  - 智能选股：从多个备选股票中筛选出有潜力的股票
+  - 动态止盈止损：根据模型预测结果调整止盈止损参数
 
 ### 其他功能
 - 📱 **响应式设计**：适配各种设备
@@ -98,17 +102,30 @@ MoA-ui/
 │   │   ├── alpha_strategy.py    # Alpha 策略
 │   │   ├── data.py              # 数据下载和查询
 │   │   ├── stock.py             # 股票信息
-│   │   └── loopback.py           # 回测功能
+│   │   ├── loopback.py           # 回测功能
+│   │   ├── price_change.py       # 涨跌幅分析
+│   │   ├── gap.py                # 跳空缺口分析
+│   │   ├── trend_speed.py        # 趋势速度分析
+│   │   ├── golden_section.py     # 黄金分割分析
+│   │   └── ml_strategy.py        # 机器学习策略
 │   ├── config/              # 配置文件
 │   ├── models/              # 数据库模型
 │   ├── utils/               # 工具函数
 │   └── app.py               # 应用入口
 ├── src/                     # 前端代码
 │   ├── views/               # 页面组件
-│   │   ├── DataDownloadView.vue  # 数据下载
-│   │   ├── DataQueryView.vue     # 数据查询
-│   │   ├── AlphaStrategyView.vue  # Alpha 策略
-│   │   └── StockInfoView.vue      # 股票信息
+│   │   ├── DataDownloadView.vue      # 数据下载
+│   │   ├── DataQueryView.vue         # 数据查询
+│   │   ├── AlphaStrategyView.vue     # Alpha 策略
+│   │   ├── StockInfoView.vue         # 股票信息
+│   │   ├── ChangeAnalysisView.vue    # 涨跌幅分析
+│   │   ├── GapAnalysisView.vue       # 跳空缺口分析
+│   │   ├── TrendSpeedView.vue        # 趋势速度分析
+│   │   ├── GoldenSectionView.vue     # 黄金分割分析
+│   │   ├── ResistanceSupportView.vue # 阻力位支撑位
+│   │   ├── LoopBackView.vue          # 历史回测
+│   │   ├── PriceChangeView.vue       # 价格变化分析
+│   │   └── MLStrategyView.vue        # 机器学习策略
 │   ├── components/          # 通用组件
 │   ├── stores/              # 状态管理
 │   ├── router/              # 路由配置
@@ -143,6 +160,32 @@ MoA-ui/
 4. 设置回测参数
 5. 点击 "运行回测"
 6. 查看回测结果和报告
+
+### 机器学习策略
+1. 进入 "机器学习策略" 页面
+
+#### 模型管理
+1. 在 "模型管理" 选项卡下，选择模型类型和拟合类型
+2. 点击 "创建模型" 生成机器学习模型
+3. 在模型列表中选择一个模型，输入股票代码和回溯天数
+4. 点击 "训练模型" 开始训练
+5. 训练完成后，可以在可用模型列表中看到训练好的模型
+
+#### 智能选股
+1. 切换到 "智能选股" 选项卡
+2. 选择一个训练好的模型
+3. 输入备选股票代码（多个用逗号分隔）
+4. 设置选中股票数量
+5. 点击 "智能选股" 开始筛选
+6. 查看选股结果，包括股票代码、概率、最新价格和预测结果
+
+#### 动态止盈止损
+1. 切换到 "动态止盈止损" 选项卡
+2. 选择一个训练好的模型
+3. 输入股票代码
+4. 设置初始止盈止损比例
+5. 点击 "调整参数" 生成动态调整后的参数
+6. 查看调整后的止盈止损参数和变化情况
 
 ## 🤝 贡献指南
 
