@@ -23,9 +23,12 @@
           <div class="model-list">
             <h3>可用模型</h3>
             <ul>
-              <li v-for="modelId in availableModels" :key="modelId">
-                {{ modelId }}
-                <button class="delete-btn" @click="deleteModel(modelId)">删除</button>
+              <li v-for="model in availableModels" :key="model.model_id">
+                <span class="model-info">
+                  <strong>{{ model.model_name }}</strong>
+                  <small>({{ model.model_id }})</small>
+                </span>
+                <button class="delete-btn" @click="deleteModel(model.model_id)">删除</button>
               </li>
               <li v-if="availableModels.length === 0" class="empty">暂无可用模型</li>
             </ul>
@@ -53,6 +56,18 @@
               </select>
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>模型名称</label>
+              <input 
+                type="text" 
+                v-model="modelForm.model_name" 
+                placeholder="请输入模型名称（可选）" 
+                class="form-control"
+              >
+              <small class="form-hint">不输入将使用默认名称</small>
+            </div>
+          </div>
           <button class="btn btn-primary" @click="createModel" :disabled="creatingModel">
             <span v-if="creatingModel" class="loading"></span>
             {{ creatingModel ? '创建中...' : '创建模型' }}
@@ -65,13 +80,46 @@
             <div class="form-group">
               <label>选择模型</label>
               <select v-model="trainForm.model_id" class="form-control">
-                <option v-for="modelId in availableModels" :key="modelId" :value="modelId">{{ modelId }}</option>
+                <option v-for="model in availableModels" :key="model.model_id" :value="model.model_id">{{ model.model_name }} ({{ model.model_id }})</option>
                 <option value="" disabled>请先创建模型</option>
               </select>
             </div>
             <div class="form-group">
               <label>股票代码</label>
-              <input type="text" v-model="trainForm.symbol" placeholder="如：sz000002" class="form-control">
+              <div class="searchable-select">
+                <div class="select-header" @click="toggleSelect($event)">
+                  <input 
+                    type="text" 
+                    class="search-input" 
+                    v-model="symbolSearchText" 
+                    placeholder="搜索股票代码或名称..."
+                    @focus="openSelect"
+                    @click="$event.stopPropagation(); openSelect()"
+                    @input="onSymbolInput"
+                  />
+                  <span 
+                    class="select-arrow" 
+                    :class="{ 'active': isSelectOpen }"
+                    @click="toggleSelect($event)"
+                  >▼</span>
+                </div>
+                <div 
+                  class="select-dropdown" 
+                  :class="{ 'open': isSelectOpen }"
+                >
+                  <div class="select-options">
+                    <div 
+                      v-for="item in filteredSymbols" 
+                      :key="item.symbol"
+                      class="select-option"
+                      :class="{ 'selected': trainForm.symbol === item.symbol }"
+                      @click="selectSymbol(item.symbol)"
+                    >
+                      {{ item.symbol }} ({{ stockNameMap[item.symbol] || item.market }})
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="form-group">
               <label>回溯天数</label>
@@ -83,6 +131,45 @@
             {{ trainingModel ? '训练中...' : '训练模型' }}
           </button>
         </div>
+        
+        <!-- 训练信息显示 -->
+        <div v-if="trainInfo" class="train-info-panel">
+          <h3>训练信息</h3>
+          <div class="train-info-header">
+            <div class="info-item">
+              <span class="info-label">开始时间:</span>
+              <span class="info-value">{{ trainInfo.start_time }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">结束时间:</span>
+              <span class="info-value">{{ trainInfo.end_time || '训练中...' }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">总耗时:</span>
+              <span class="info-value">{{ trainInfo.total_time || '计算中...' }}</span>
+            </div>
+          </div>
+          
+          <div class="train-steps">
+            <h4>训练步骤</h4>
+            <div class="steps-list">
+              <div 
+                v-for="(step, index) in trainInfo.steps" 
+                :key="index"
+                class="step-item"
+              >
+                <div class="step-header">
+                  <span class="step-index">{{ index + 1 }}</span>
+                  <span class="step-title">{{ step.step }}</span>
+                  <span class="step-time">{{ step.timestamp }}</span>
+                </div>
+                <div class="step-content">
+                  {{ step.message }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       
       <!-- 智能选股 -->
@@ -93,7 +180,7 @@
             <div class="form-group">
               <label>选择模型</label>
               <select v-model="pickForm.model_id" class="form-control">
-                <option v-for="modelId in availableModels" :key="modelId" :value="modelId">{{ modelId }}</option>
+                <option v-for="model in availableModels" :key="model.model_id" :value="model.model_id">{{ model.model_name }} ({{ model.model_id }})</option>
                 <option value="" disabled>请先创建模型</option>
               </select>
             </div>
@@ -142,13 +229,46 @@
             <div class="form-group">
               <label>选择模型</label>
               <select v-model="stopForm.model_id" class="form-control">
-                <option v-for="modelId in availableModels" :key="modelId" :value="modelId">{{ modelId }}</option>
+                <option v-for="model in availableModels" :key="model.model_id" :value="model.model_id">{{ model.model_name }} ({{ model.model_id }})</option>
                 <option value="" disabled>请先创建模型</option>
               </select>
             </div>
             <div class="form-group">
               <label>股票代码</label>
-              <input type="text" v-model="stopForm.symbol" placeholder="如：sz000002" class="form-control">
+              <div class="searchable-select">
+                <div class="select-header" @click="toggleStopSelect($event)">
+                  <input 
+                    type="text" 
+                    class="search-input" 
+                    v-model="stopSymbolSearchText" 
+                    placeholder="搜索股票代码或名称..."
+                    @focus="openStopSelect"
+                    @click="$event.stopPropagation(); openStopSelect()"
+                    @input="onStopSymbolInput"
+                  />
+                  <span 
+                    class="select-arrow" 
+                    :class="{ 'active': isStopSelectOpen }"
+                    @click="toggleStopSelect($event)"
+                  >▼</span>
+                </div>
+                <div 
+                  class="select-dropdown" 
+                  :class="{ 'open': isStopSelectOpen }"
+                >
+                  <div class="select-options">
+                    <div 
+                      v-for="item in filteredStopSymbols" 
+                      :key="item.symbol"
+                      class="select-option"
+                      :class="{ 'selected': stopForm.symbol === item.symbol }"
+                      @click="selectStopSymbol(item.symbol)"
+                    >
+                      {{ item.symbol }} ({{ stockNameMap[item.symbol] || item.market }})
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="form-row">
@@ -198,11 +318,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 
 // API基础URL
-const API_BASE_URL = '/api/moA/ml_strategy';
+const API_BASE_URL = '/api/moA';
 
 // 选项卡数据
 const tabs = [
@@ -214,26 +334,171 @@ const tabs = [
 // 当前激活的选项卡
 const activeTab = ref('model');
 
-// 可用模型列表
-const availableModels = ref<string[]>([]);
+// 可用模型列表，改为包含模型ID和名称的对象数组
+const availableModels = ref<Array<{model_id: string, model_name: string}>>([]);
 
 // 创建模型表单
 const modelForm = ref({
   model_type: 'random_forest',
-  fit_type: 'clf'
+  fit_type: 'clf',
+  model_name: ''  // 添加模型名称字段
 });
 
 // 训练模型表单
 const trainForm = ref({
   model_id: '',
-  symbol: 'sz000002',
+  symbol: '',
   lookback_days: 20
 });
+
+// 股票代码搜索文本（训练模型）
+const symbolSearchText = ref('');
+
+// 股票代码搜索文本（动态止盈止损）
+const stopSymbolSearchText = ref('');
+
+// 已下载的股票列表
+const symbolsList = ref<any[]>([]);
+
+// 股票名称映射表，从API获取真实数据
+const stockNameMap = ref<Record<string, string>>({});
+
+// 过滤后的股票列表（训练模型）
+const filteredSymbols = computed(() => {
+  if (!symbolSearchText.value) {
+    return symbolsList.value;
+  }
+  
+  const searchText = symbolSearchText.value.toLowerCase();
+  return symbolsList.value.filter(item => {
+    if (item.symbol.toLowerCase().includes(searchText)) {
+      return true;
+    }
+    
+    const stockName = stockNameMap.value[item.symbol]?.toLowerCase() || '';
+    if (stockName.includes(searchText)) {
+      return true;
+    }
+    
+    return false;
+  });
+});
+
+// 过滤后的股票列表（动态止盈止损）
+const filteredStopSymbols = computed(() => {
+  if (!stopSymbolSearchText.value) {
+    return symbolsList.value;
+  }
+  
+  const searchText = stopSymbolSearchText.value.toLowerCase();
+  return symbolsList.value.filter(item => {
+    if (item.symbol.toLowerCase().includes(searchText)) {
+      return true;
+    }
+    
+    const stockName = stockNameMap.value[item.symbol]?.toLowerCase() || '';
+    if (stockName.includes(searchText)) {
+      return true;
+    }
+    
+    return false;
+  });
+});
+
+// 下拉框显示状态（训练模型）
+const isSelectOpen = ref(false);
+
+// 下拉框显示状态（动态止盈止损）
+const isStopSelectOpen = ref(false);
+
+// 获取已下载的股票列表
+const fetchSymbolsList = async () => {
+  try {
+    const response = await axios.get('/api/moA/data/download/symbols');
+    symbolsList.value = response.data;
+    // 从响应数据中提取股票代码和名称，构建股票名称映射表
+    // 注意：实际API响应中可能不包含股票名称，需要根据实际情况调整
+    // 如果API不返回股票名称，可以考虑添加一个新的API来获取股票名称
+  } catch (error) {
+    console.error('获取已下载股票列表失败:', error);
+    symbolsList.value = [];
+  }
+};
+
+// 打开下拉框（训练模型）
+const openSelect = () => {
+  isSelectOpen.value = true;
+};
+
+// 打开下拉框（动态止盈止损）
+const openStopSelect = () => {
+  isStopSelectOpen.value = true;
+};
+
+// 切换下拉框显示状态（训练模型）
+const toggleSelect = (event?: MouseEvent) => {
+  if (event) {
+    event.stopPropagation();
+  }
+  isSelectOpen.value = !isSelectOpen.value;
+};
+
+// 切换下拉框显示状态（动态止盈止损）
+const toggleStopSelect = (event?: MouseEvent) => {
+  if (event) {
+    event.stopPropagation();
+  }
+  isStopSelectOpen.value = !isStopSelectOpen.value;
+};
+
+// 选择股票（训练模型）
+const selectSymbol = (symbol: string) => {
+  trainForm.value.symbol = symbol;
+  symbolSearchText.value = symbol;
+  isSelectOpen.value = false;
+};
+
+// 选择股票（动态止盈止损）
+const selectStopSymbol = (symbol: string) => {
+  stopForm.value.symbol = symbol;
+  stopSymbolSearchText.value = symbol;
+  isStopSelectOpen.value = false;
+};
+
+// 处理搜索输入框输入事件（训练模型）
+const onSymbolInput = () => {
+  // 当用户在输入框中输入时，更新trainForm.symbol
+  trainForm.value.symbol = symbolSearchText.value;
+};
+
+// 处理搜索输入框输入事件（动态止盈止损）
+const onStopSymbolInput = () => {
+  // 当用户在输入框中输入时，更新stopForm.symbol
+  stopForm.value.symbol = stopSymbolSearchText.value;
+};
+
+// 点击外部关闭下拉框
+const handleClickOutside = (event: MouseEvent) => {
+  const selectElements = document.querySelectorAll('.searchable-select');
+  const target = event.target as HTMLElement;
+  
+  let clickedInside = false;
+  selectElements.forEach(element => {
+    if (element.contains(target)) {
+      clickedInside = true;
+    }
+  });
+  
+  if (!clickedInside) {
+    isSelectOpen.value = false;
+    isStopSelectOpen.value = false;
+  }
+};
 
 // 智能选股表单
 const pickForm = ref({
   model_id: '',
-  symbols: 'sz000002,sh600036,sz000858,sh601318,sz000333',
+  symbols: '',
   top_n: 3
 });
 
@@ -243,7 +508,7 @@ const selectedStocks = ref<any[]>([]);
 // 止盈止损表单
 const stopForm = ref({
   model_id: '',
-  symbol: 'sz000002',
+  symbol: '',
   current_params: {
     stop_loss: 0.05,
     take_profit: 0.1
@@ -259,6 +524,9 @@ const trainingModel = ref(false);
 const pickingStocks = ref(false);
 const adjustingParams = ref(false);
 
+// 训练信息
+const trainInfo = ref<any>(null);
+
 // 消息提示
 const message = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -273,7 +541,7 @@ const showMessage = (text: string, type: 'success' | 'error' | 'info' = 'info') 
 // 获取可用模型列表
 const fetchAvailableModels = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/available_models`);
+    const response = await axios.get(`${API_BASE_URL}/ml_strategy/available_models`);
     if (response.data.success) {
       availableModels.value = response.data.models;
     }
@@ -287,10 +555,12 @@ const fetchAvailableModels = async () => {
 const createModel = async () => {
   creatingModel.value = true;
   try {
-    const response = await axios.post(`${API_BASE_URL}/create_model`, modelForm.value);
+    const response = await axios.post(`${API_BASE_URL}/ml_strategy/create_model`, modelForm.value);
     if (response.data.success) {
       showMessage('模型创建成功', 'success');
       await fetchAvailableModels();
+      // 清空模型名称输入框
+      modelForm.value.model_name = '';
     }
   } catch (error) {
     console.error('创建模型失败:', error);
@@ -301,9 +571,19 @@ const createModel = async () => {
 };
 
 // 删除模型
-const deleteModel = (modelId: string) => {
-  // 这里可以添加删除模型的逻辑
-  showMessage('模型删除功能暂未实现', 'info');
+const deleteModel = async (modelId: string) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/ml_strategy/delete_model`, { model_id: modelId });
+    if (response.data.success) {
+      showMessage('模型删除成功', 'success');
+      await fetchAvailableModels();
+    } else {
+      showMessage(`模型删除失败: ${response.data.message}`, 'error');
+    }
+  } catch (error) {
+    console.error('删除模型失败:', error);
+    showMessage('模型删除失败', 'error');
+  }
 };
 
 // 训练模型
@@ -314,12 +594,23 @@ const trainModel = async () => {
   }
   
   trainingModel.value = true;
+  // 重置训练信息
+  trainInfo.value = null;
+  
   try {
-    const response = await axios.post(`${API_BASE_URL}/train_model`, trainForm.value);
+    const response = await axios.post(`${API_BASE_URL}/ml_strategy/train_model`, trainForm.value);
     if (response.data.success) {
       showMessage('模型训练成功', 'success');
+      // 保存训练信息
+      if (response.data.train_info) {
+        trainInfo.value = response.data.train_info;
+      }
     } else {
       showMessage(`模型训练失败: ${response.data.message}`, 'error');
+      // 保存训练信息（即使失败）
+      if (response.data.train_info) {
+        trainInfo.value = response.data.train_info;
+      }
     }
   } catch (error) {
     console.error('训练模型失败:', error);
@@ -338,7 +629,7 @@ const pickStocks = async () => {
   
   pickingStocks.value = true;
   try {
-    const response = await axios.post(`${API_BASE_URL}/smart_pick`, {
+    const response = await axios.post(`${API_BASE_URL}/ml_strategy/smart_pick`, {
       ...pickForm.value,
       symbols: pickForm.value.symbols.split(',').map(s => s.trim())
     });
@@ -365,7 +656,7 @@ const adjustStopParams = async () => {
   
   adjustingParams.value = true;
   try {
-    const response = await axios.post(`${API_BASE_URL}/adjust_stop_params`, stopForm.value);
+    const response = await axios.post(`${API_BASE_URL}/ml_strategy/adjust_stop_params`, stopForm.value);
     if (response.data.success) {
       adjustedParams.value = response.data.adjusted_params;
       showMessage('止盈止损参数调整成功', 'success');
@@ -380,9 +671,16 @@ const adjustStopParams = async () => {
   }
 };
 
-// 页面加载时获取可用模型
+// 页面加载时获取可用模型和股票列表
 onMounted(() => {
   fetchAvailableModels();
+  fetchSymbolsList();
+  document.addEventListener('click', handleClickOutside);
+});
+
+// 组件卸载时移除事件监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
 });
 </script>
 
@@ -498,15 +796,36 @@ onMounted(() => {
   padding: 8px 12px;
   margin-bottom: 8px;
   background: var(--card-background);
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 4px;
+  box-shadow: var(--shadow-sm);
   transition: all 0.2s ease;
-  border: 1px solid var(--border-color);
 }
 
 .model-list li:hover {
   box-shadow: var(--shadow-md);
-  transform: translateX(5px);
+}
+
+.model-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.model-info strong {
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+.model-info small {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
 }
 
 .model-list li.empty {
@@ -517,19 +836,22 @@ onMounted(() => {
 }
 
 .delete-btn {
-  padding: 4px 8px;
+  padding: 6px 12px;
   background: var(--danger-color);
-  color: white;
+  color: rgb(241, 9, 9);
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 500;
   transition: all 0.2s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .delete-btn:hover {
   background: var(--danger-hover);
   transform: scale(1.05);
+  box-shadow: var(--shadow-md);
 }
 
 /* 表单样式 */
@@ -863,6 +1185,224 @@ onMounted(() => {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+/* 搜索选择组件样式 */
+.searchable-select {
+  position: relative;
+  width: 100%;
+}
+
+.select-header {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.search-input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--card-background);
+  color: var(--text-color);
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.1);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+  font-size: 12px;
+}
+
+.select-arrow.active {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 0 0 6px 6px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  display: none;
+  overflow-y: auto;
+  max-height: 300px;
+  margin-top: -1px;
+}
+
+.select-dropdown.open {
+  display: block;
+}
+
+.select-options {
+  padding: 5px 0;
+}
+
+.select-option {
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 14px;
+  color: var(--text-color);
+}
+
+.select-option:hover {
+  background-color: var(--hover-color);
+}
+
+.select-option.selected {
+  background-color: rgba(64, 158, 255, 0.1);
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.hidden-select {
+  display: none;
+}
+
+/* 训练信息面板样式 */
+.train-info-panel {
+  background: var(--background-color);
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 20px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+.train-info-panel h3 {
+  margin-bottom: 15px;
+  color: var(--text-color);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.train-info-panel h4 {
+  margin: 20px 0 10px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.train-info-header {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: var(--card-background);
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm);
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.info-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-value {
+  font-size: 16px;
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.train-steps {
+  background: var(--card-background);
+  border-radius: 6px;
+  padding: 15px;
+  box-shadow: var(--shadow-sm);
+}
+
+.steps-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.step-item {
+  margin-bottom: 15px;
+  padding: 15px;
+  background: var(--background-color);
+  border-radius: 6px;
+  border-left: 3px solid var(--primary-color);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.step-item:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateX(5px);
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.step-index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: var(--primary-color);
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.step-title {
+  font-weight: 600;
+  color: var(--text-color);
+  font-size: 14px;
+  flex: 1;
+}
+
+.step-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.step-content {
+  font-size: 14px;
+  color: var(--text-color);
+  line-height: 1.5;
+  margin-left: 34px;
+  padding-left: 10px;
+  border-left: 1px dashed var(--border-color);
 }
 
 /* 响应式设计 */

@@ -194,7 +194,10 @@ class TXApi(StockBaseMarket, SupportMixin):
             try:
                 # 解析返回的JSON数据
                 json_data = data.json()
-                kl_pd = self.data_parser_cls(self._symbol, json_data).df
+                # 获取子市场信息
+                sub_market = '.' + self._symbol.value.split('.')[1] if '.' in self._symbol.value else ''
+                # 正确调用TXParser类，传递所有必要的参数
+                kl_pd = self.data_parser_cls(self._symbol, sub_market, json_data).df
             except Exception as e:
                 print(f'解析腾讯财经历史数据失败: {e}')
                 kl_pd = None

@@ -13,6 +13,9 @@ from abupy import AbuKLManager
 import numpy as np
 import pandas as pd
 
+# 导入数据库模型
+from models import db, MLModel, KlineData
+
 # 创建蓝图
 ml_strategy_bp = Blueprint('ml_strategy', __name__)
 
@@ -265,19 +268,42 @@ class MLStrategyService:
         """
         初始化服务
         """
-        self.model_wrappers = {}
+        pass
     
-    def create_model(self, model_type='random_forest', fit_type='clf'):
+    def create_model(self, model_type='random_forest', fit_type='clf', model_name=''):
         """
         创建机器学习模型
         :param model_type: 模型类型
         :param fit_type: 拟合类型
+        :param model_name: 模型名称
         :return: 模型ID
         """
-        model_wrapper = MLModelWrapper(model_type=model_type, fit_type=fit_type)
-        model_id = f"model_{len(self.model_wrappers) + 1}"
-        self.model_wrappers[model_id] = model_wrapper
-        return model_id
+        # 生成唯一的model_id
+        # 计算现有模型数量
+        existing_count = MLModel.query.count()
+        model_id = f"model_{existing_count + 1}"
+        
+        # 如果没有提供模型名称，使用默认名称
+        if not model_name:
+            model_name = f"{model_type}_{fit_type}_{model_id}"
+        
+        # 创建数据库记录
+        ml_model = MLModel(
+            model_id=model_id,
+            model_name=model_name,
+            model_type=model_type,
+            fit_type=fit_type,
+            lookback_days=20  # 默认回溯天数
+        )
+        
+        try:
+            db.session.add(ml_model)
+            db.session.commit()
+            return model_id
+        except Exception as e:
+            db.session.rollback()
+            print(f"创建模型数据库记录失败: {e}")
+            return None
     
     def get_model(self, model_id):
         """
@@ -285,7 +311,53 @@ class MLStrategyService:
         :param model_id: 模型ID
         :return: 模型封装对象
         """
-        return self.model_wrappers.get(model_id)
+        try:
+            ml_model = MLModel.query.filter_by(model_id=model_id).first()
+            if ml_model:
+                # 重新创建模型包装器
+                model_wrapper = MLModelWrapper(model_type=ml_model.model_type, fit_type=ml_model.fit_type)
+                model_wrapper.lookback_days = ml_model.lookback_days
+                # 如果有序列化的模型数据，加载模型
+                if ml_model.model_data:
+                    model_wrapper.model = MLModel().deserialize_model(ml_model.model_data)
+                return model_wrapper
+            return None
+        except Exception as e:
+            print(f"获取模型失败: {e}")
+            return None
+    
+    def get_model_name(self, model_id):
+        """
+        获取模型名称
+        :param model_id: 模型ID
+        :return: 模型名称
+        """
+        try:
+            ml_model = MLModel.query.filter_by(model_id=model_id).first()
+            if ml_model:
+                return ml_model.model_name
+            return None
+        except Exception as e:
+            print(f"获取模型名称失败: {e}")
+            return None
+    
+    def delete_model(self, model_id):
+        """
+        删除机器学习模型
+        :param model_id: 模型ID
+        :return: 删除结果
+        """
+        try:
+            ml_model = MLModel.query.filter_by(model_id=model_id).first()
+            if ml_model:
+                db.session.delete(ml_model)
+                db.session.commit()
+                return True, "模型删除成功"
+            return False, "模型不存在"
+        except Exception as e:
+            db.session.rollback()
+            print(f"删除模型失败: {e}")
+            return False, f"删除模型失败: {str(e)}"
     
     def train_model(self, model_id, symbol, lookback_days=20):
         """
@@ -295,18 +367,97 @@ class MLStrategyService:
         :param lookback_days: 回溯天数，默认20，与预测时保持一致
         :return: 训练结果
         """
+        import time
+        
+        # 训练信息字典，即使发生异常也能返回已执行的步骤
+        train_info = {
+            'start_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'steps': []
+        }
+        
         model_wrapper = self.get_model(model_id)
         if not model_wrapper:
-            return False, "模型不存在"
+            train_info['steps'].append({
+                'step': '初始化',
+                'message': '模型不存在',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            train_info['end_time'] = time.strftime('%Y-%m-%d %H:%M:%S')
+            train_info['total_time'] = '0.00 秒'
+            return False, "模型不存在", train_info
         
         try:
             # 保存lookback_days到模型对象中
             model_wrapper.lookback_days = lookback_days
+            train_info['steps'].append({
+                'step': '初始化',
+                'message': f'设置回溯天数为 {lookback_days}',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
             
             # 获取股票数据
-            kl_pd = ABuSymbolPd.make_kl_df(symbol, n_folds=lookback_days + 20)
-            if kl_pd.shape[0] < lookback_days + 20:
-                return False, "数据不足"
+            train_info['steps'].append({
+                'step': '数据获取',
+                'message': f'开始从数据下载库获取 {symbol} 的真实股票数据',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
+            # 从数据下载库获取真实股票数据
+            kl_pd = None
+            
+            # 从KlineData模型获取数据
+            kline_records = KlineData.query.filter_by(symbol=symbol).order_by(KlineData.date.asc()).all()
+            
+            train_info['steps'].append({
+                'step': '数据获取',
+                'message': f'从数据库获取到 {len(kline_records)} 条 {symbol} 的真实股票数据',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
+            # 检查数据获取结果
+            if not kline_records:
+                train_info['steps'].append({
+                    'step': '数据获取',
+                    'message': f'获取真实数据失败，无法获取 {symbol} 的任何数据。可能的原因：1. 股票代码不存在；2. 数据未下载',
+                    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+                })
+                train_info['end_time'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                train_info['total_time'] = '0.00 秒'
+                return False, "获取数据失败，无法获取股票数据。请先使用数据下载功能下载该股票的数据", train_info
+            elif len(kline_records) < lookback_days + 20:
+                data_shape = len(kline_records)
+                train_info['steps'].append({
+                    'step': '数据获取',
+                    'message': f'获取真实数据成功，但数据量不足（{data_shape} 条），需要至少 {lookback_days + 20} 条数据。建议先使用数据下载功能下载更多数据',
+                    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+                })
+                train_info['end_time'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                train_info['total_time'] = '0.00 秒'
+                return False, f"数据不足，只有 {data_shape} 条数据，需要至少 {lookback_days + 20} 条数据。建议先使用数据下载功能下载更多数据", train_info
+            
+            # 将数据库记录转换为pandas DataFrame，保持与ABU框架输出一致的格式
+            import pandas as pd
+            kline_data = []
+            for record in kline_records:
+                kline_data.append({
+                    'date': record.date,
+                    'open': record.open,
+                    'high': record.high,
+                    'low': record.low,
+                    'close': record.close,
+                    'volume': record.volume,
+                    'amount': record.amount
+                })
+            
+            kl_pd = pd.DataFrame(kline_data)
+            kl_pd.set_index('date', inplace=True)
+            kl_pd.sort_index(inplace=True)
+            
+            train_info['steps'].append({
+                'step': '数据获取',
+                'message': f'成功获取 {kl_pd.shape[0]} 条真实数据，时间范围：{kl_pd.index[0].strftime("%Y-%m-%d")} 到 {kl_pd.index[-1].strftime("%Y-%m-%d")}',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
             
             # 生成训练数据
             x_train = []
@@ -314,13 +465,19 @@ class MLStrategyService:
             
             # 处理缺失值，填充NaN
             kl_pd = kl_pd.fillna(method='ffill').fillna(method='bfill')
+            train_info['steps'].append({
+                'step': '数据预处理',
+                'message': '处理缺失值，填充NaN',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
             
             for i in range(lookback_days, kl_pd.shape[0] - 5):
-                # 生成特征
+                # 生成特征，使用真实数据计算
                 features = []
                 for col in ['close', 'volume', 'high', 'low', 'open']:
                     features.append(kl_pd[col].values[i-lookback_days:i])
                 
+                # 计算真实的收益率和波动率特征
                 returns = kl_pd['close'].pct_change().values[i-lookback_days:i]
                 volatility = kl_pd['close'].pct_change().rolling(window=5).std().values[i-lookback_days:i]
                 
@@ -333,7 +490,7 @@ class MLStrategyService:
                 
                 x_train.append(np.concatenate(features))
                 
-                # 生成标签
+                # 生成真实标签：5天后是否上涨
                 future_return = kl_pd['close'].pct_change(periods=5).values[i]
                 # 处理标签中的NaN值
                 future_return = 0.0 if np.isnan(future_return) else future_return
@@ -342,12 +499,81 @@ class MLStrategyService:
             x_train = np.array(x_train)
             y_train = np.array(y_train)
             
+            train_info['steps'].append({
+                'step': '训练数据生成',
+                'message': f'使用真实数据生成 {x_train.shape[0]} 个样本，每个样本包含 {x_train.shape[1]} 个特征',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
+            # 计算类别分布
+            unique, counts = np.unique(y_train, return_counts=True)
+            class_distribution = dict(zip(unique, counts))
+            train_info['steps'].append({
+                'step': '数据统计',
+                'message': f'真实数据类别分布：上涨 {class_distribution.get(1, 0)} 个，下跌 {class_distribution.get(0, 0)} 个',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
             # 训练模型
+            train_info['steps'].append({
+                'step': '模型训练',
+                'message': f'开始使用真实数据训练 {model_wrapper.model_type} 模型',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
+            # 记录训练开始时间
+            train_start_time = time.time()
+            
+            # 使用真实数据训练模型
             model_wrapper.fit(x_train, y_train)
             
-            return True, "模型训练成功"
+            train_end_time = time.time()
+            
+            train_info['steps'].append({
+                'step': '模型训练',
+                'message': f'模型训练完成，使用真实数据训练耗时 {train_end_time - train_start_time:.2f} 秒',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
+            # 将训练后的真实模型保存到数据库
+            ml_model = MLModel.query.filter_by(model_id=model_id).first()
+            if ml_model:
+                # 序列化模型
+                train_info['steps'].append({
+                    'step': '模型保存',
+                    'message': '开始序列化训练好的真实模型',
+                    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+                })
+                
+                serialized_model = MLModel().serialize_model(model_wrapper.model)
+                
+                # 更新数据库记录
+                ml_model.lookback_days = lookback_days
+                ml_model.model_data = serialized_model
+                
+                db.session.commit()
+                
+                train_info['steps'].append({
+                    'step': '模型保存',
+                    'message': '真实模型成功保存到SQLite数据库',
+                    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+                })
+            
+            train_info['end_time'] = time.strftime('%Y-%m-%d %H:%M:%S')
+            train_info['total_time'] = f'{train_end_time - train_start_time:.2f} 秒'
+            
+            return True, "模型训练成功", train_info
         except Exception as e:
-            return False, f"模型训练失败: {e}"
+            db.session.rollback()
+            # 记录异常信息
+            train_info['steps'].append({
+                'step': '训练失败',
+                'message': f'训练过程中发生错误: {str(e)}',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            train_info['end_time'] = time.strftime('%Y-%m-%d %H:%M:%S')
+            train_info['total_time'] = '0.00 秒'
+            return False, f"模型训练失败: {e}", train_info
     
     def smart_pick_stocks(self, model_id, symbols, top_n=10):
         """
@@ -369,18 +595,36 @@ class MLStrategyService:
             
             for symbol in symbols:
                 try:
-                    # 获取股票数据，确保有足够的数据
-                    kl_pd = ABuSymbolPd.make_kl_df(symbol, n_folds=lookback_days + 20)
+                    # 从数据下载库获取股票数据
+                    kline_records = KlineData.query.filter_by(symbol=symbol).order_by(KlineData.date.asc()).all()
                     
-                    # 检查kl_pd是否为None
-                    if kl_pd is None:
-                        print(f"获取{symbol}数据失败，跳过")
+                    # 检查是否获取到数据
+                    if not kline_records:
+                        print(f"从数据库获取{symbol}数据失败，跳过")
                         continue
                         
                     # 检查数据量是否足够
-                    if kl_pd.shape[0] < lookback_days + 20:
-                        print(f"{symbol}数据量不足，跳过")
+                    if len(kline_records) < lookback_days + 20:
+                        print(f"{symbol}数据量不足（{len(kline_records)}条），需要至少{lookback_days + 20}条，跳过")
                         continue
+                    
+                    # 将数据库记录转换为pandas DataFrame
+                    import pandas as pd
+                    kline_data = []
+                    for record in kline_records:
+                        kline_data.append({
+                            'date': record.date,
+                            'open': record.open,
+                            'high': record.high,
+                            'low': record.low,
+                            'close': record.close,
+                            'volume': record.volume,
+                            'amount': record.amount
+                        })
+                    
+                    kl_pd = pd.DataFrame(kline_data)
+                    kl_pd.set_index('date', inplace=True)
+                    kl_pd.sort_index(inplace=True)
                     
                     # 处理缺失值，填充NaN
                     kl_pd = kl_pd.fillna(method='ffill').fillna(method='bfill')
@@ -451,10 +695,34 @@ class MLStrategyService:
             # 使用模型中保存的lookback_days参数
             lookback_days = model_wrapper.lookback_days
             
-            # 获取股票数据，确保有足够的数据
-            kl_pd = ABuSymbolPd.make_kl_df(symbol, n_folds=lookback_days + 20)
-            if kl_pd.shape[0] < lookback_days + 20:
-                return current_params, "数据不足"
+            # 从数据下载库获取股票数据
+            kline_records = KlineData.query.filter_by(symbol=symbol).order_by(KlineData.date.asc()).all()
+            
+            # 检查是否获取到数据
+            if not kline_records:
+                return current_params, "获取数据失败"
+            
+            # 检查数据量是否足够
+            if len(kline_records) < lookback_days + 20:
+                return current_params, f"数据不足，只有{len(kline_records)}条数据，需要至少{lookback_days + 20}条"
+            
+            # 将数据库记录转换为pandas DataFrame
+            import pandas as pd
+            kline_data = []
+            for record in kline_records:
+                kline_data.append({
+                    'date': record.date,
+                    'open': record.open,
+                    'high': record.high,
+                    'low': record.low,
+                    'close': record.close,
+                    'volume': record.volume,
+                    'amount': record.amount
+                })
+            
+            kl_pd = pd.DataFrame(kline_data)
+            kl_pd.set_index('date', inplace=True)
+            kl_pd.sort_index(inplace=True)
             
             # 处理缺失值，填充NaN
             kl_pd = kl_pd.fillna(method='ffill').fillna(method='bfill')
@@ -481,18 +749,21 @@ def create_model():
     POST /ml_strategy/create_model
     Body: {
         "model_type": "random_forest",  # 模型类型
-        "fit_type": "clf"  # 拟合类型
+        "fit_type": "clf",  # 拟合类型
+        "model_name": "我的模型"  # 模型名称（可选）
     }
     """
     data = request.get_json()
     model_type = data.get('model_type', 'random_forest')
     fit_type = data.get('fit_type', 'clf')
+    model_name = data.get('model_name', '')  # 获取模型名称参数
     
-    model_id = ml_strategy_service.create_model(model_type, fit_type)
+    model_id = ml_strategy_service.create_model(model_type, fit_type, model_name)
     
     return jsonify({
         "success": True,
         "model_id": model_id,
+        "model_name": ml_strategy_service.get_model_name(model_id),
         "message": "模型创建成功"
     })
 
@@ -518,11 +789,12 @@ def train_model():
             "message": "缺少必要参数"
         })
     
-    success, message = ml_strategy_service.train_model(model_id, symbol, lookback_days)
+    success, message, train_info = ml_strategy_service.train_model(model_id, symbol, lookback_days)
     
     return jsonify({
         "success": success,
-        "message": message
+        "message": message,
+        "train_info": train_info
     })
 
 @ml_strategy_bp.route('/smart_pick', methods=['POST'])
@@ -594,9 +866,50 @@ def available_models():
     获取可用模型列表
     GET /ml_strategy/available_models
     """
-    models = list(ml_strategy_service.model_wrappers.keys())
+    try:
+        # 从数据库获取所有模型
+        models = MLModel.query.all()
+        model_list = []
+        
+        for model in models:
+            model_list.append({
+                "model_id": model.model_id,
+                "model_name": model.model_name
+            })
+        
+        return jsonify({
+            "success": True,
+            "models": model_list
+        })
+    except Exception as e:
+        print(f"获取可用模型列表失败: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"获取模型列表失败: {str(e)}",
+            "models": []
+        })
+
+@ml_strategy_bp.route('/delete_model', methods=['POST'])
+def delete_model():
+    """
+    删除机器学习模型
+    POST /ml_strategy/delete_model
+    Body: {
+        "model_id": "model_1"  # 模型ID
+    }
+    """
+    data = request.get_json()
+    model_id = data.get('model_id')
+    
+    if not model_id:
+        return jsonify({
+            "success": False,
+            "message": "缺少模型ID参数"
+        })
+    
+    success, message = ml_strategy_service.delete_model(model_id)
     
     return jsonify({
-        "success": True,
-        "models": models
+        "success": success,
+        "message": message
     })

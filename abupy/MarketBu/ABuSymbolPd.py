@@ -12,8 +12,8 @@ from collections import Iterable
 
 import pandas as pd
 
-from .ABuDataSource import kline_pd
-from ..MarketBu.ABuDataCache import save_kline_df, check_csv_local
+from ..MarketBu.ABuDataSource import kline_pd
+from ..MarketBu.ABuDataCache import save_kline_df
 from ..MarketBu.ABuSymbol import code_to_symbol
 from .ABuSymbol import Symbol
 from .ABuMarket import split_k_market
@@ -25,7 +25,7 @@ from ..CoreBu.ABuFixes import range
 from ..CoreBu.ABuDeprecated import AbuDeprecated
 from ..IndicatorBu import ABuNDAtr as Atr
 from ..UtilBu import ABuDateUtil
-from ..UtilBu.ABuFileUtil import batch_h5s
+
 from ..UtilBu.ABuProgress import AbuMulPidProgress, do_clear_output
 from ..CoreBu.ABuParallel import delayed, Parallel
 from ..CoreBu.ABuFixes import six
@@ -223,9 +223,6 @@ def kl_df_dict_parallel(symbols, data_mode=ABuEnv.EMarketDataSplitMode.E_DATA_SP
 
     if save:
         # 统一进行批量保存
-        h5s_fn = ABuEnv.g_project_kl_df_data if ABuEnv.g_data_cache_type == EDataCacheType.E_DATA_CACHE_HDF5 else None
-
-        @batch_h5s(h5s_fn)
         def _batch_save():
             for df_dict in df_dicts:
                 # 每一个df_dict是一个并行的序列返回的数据
@@ -324,12 +321,15 @@ def get_price(symbol, start_date=None, end_date=None):
         return df.rename(columns={'close': 'price'})
 
 
+# 导入SQLite缓存模块
+from ..MarketBu.ABuSQLiteCache import load_kline_from_sqlite
+
 def check_symbol_in_local_csv(symbol):
     """
-    通过传递symbol监测symbol对象是否存在csv缓存，不监测时间范围，只监测是否存在缓存
+    通过传递symbol监测symbol对象是否存在SQLite缓存，不监测时间范围，只监测是否存在缓存
     :param symbol: str对象 or Symbol对象, 内部统一使用code_to_symbol变成Symbol对象
                    e.g : 'usTSLA' or Symbol(MType.US,'TSLA')
-    :return: bool, symbol是否存在csv缓存
+    :return: bool, symbol是否存在SQLite缓存
     """
 
     if isinstance(symbol, six.string_types):
@@ -342,7 +342,9 @@ def check_symbol_in_local_csv(symbol):
     if not isinstance(symbol, Symbol):
         raise TypeError('symbol must like as "usTSLA" or "TSLA" or Symbol(MType.US, "TSLA")')
 
-    return check_csv_local(symbol.value)
+    # 使用SQLite检查数据是否存在
+    existing_df, _, _ = load_kline_from_sqlite(symbol.value)
+    return existing_df is not None
 
 
 def combine_pre_kl_pd(kl_pd, n_folds=1):

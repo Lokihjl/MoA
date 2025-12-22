@@ -13,8 +13,8 @@ from abupy.CoreBu.ABuEnv import EMarketSourceType, EMarketDataFetchMode
 ABuEnv.g_market_source = EMarketSourceType.E_MARKET_SOURCE_tx
 # 设置数据获取模式为正常模式（先本地，后网络）
 ABuEnv.g_data_fetch_mode = EMarketDataFetchMode.E_DATA_FETCH_NORMAL
-# 设置不使用HDF5缓存，使用CSV缓存
-ABuEnv.g_data_cache_type = ABuEnv.EDataCacheType.E_DATA_CACHE_CSV
+# 设置使用SQLite缓存
+ABuEnv.g_data_cache_type = ABuEnv.EDataCacheType.E_DATA_CACHE_SQLITE
 
 from flask import Flask, jsonify
 from config.config import DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS, DEBUG, PORT

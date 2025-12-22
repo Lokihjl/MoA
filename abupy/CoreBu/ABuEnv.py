@@ -402,12 +402,12 @@ class EDataCacheType(Enum):
     E_DATA_CACHE_CSV = 1
     """适合分布式扩展，存贮空间需要大"""
     E_DATA_CACHE_MONGODB = 2
+    """读取及写入速度适中，存贮空间紧凑，适合单机使用"""
+    E_DATA_CACHE_SQLITE = 3
 
 
-# """默认金融时间序列数据缓存类型为HDF5，单机固态硬盘推荐HDF5，非固态硬盘使用CSV，否则量大后hdf5写入速度无法接受"""
-# g_data_cache_type = EDataCacheType.E_DATA_CACHE_HDF5
-"""对外版本由于用户电脑性能，存储空间且winodws用户，python2用户多，所以更改默认存储类型为csv"""
-g_data_cache_type = EDataCacheType.E_DATA_CACHE_CSV
+# """默认金融时间序列数据缓存类型为SQLite，适合大多数用户使用"""
+g_data_cache_type = EDataCacheType.E_DATA_CACHE_SQLITE
 
 """csv模式下的存储路径"""
 g_project_kl_df_data_csv = path.join(g_project_data_dir, 'csv')

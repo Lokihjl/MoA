@@ -134,17 +134,19 @@ def kline_pd(symbol, data_mode, n_folds=2, start=None, end=None, save=True):
         # 如果外部负责保存，就需要save_kl_key中相关信息
         save_kl_key = (temp_symbol, None, None)
 
-        # symbol本地的pd.DataFrame数据缓存
+        # symbol本地的pd.DataFrame数据缓存，强制使用SQLite
         df = None
         # 本地的pd.DataFrame金融时间序列的第一个日期 int类型
         df_req_start = 0
         # 本地的pd.DataFrame金融时间序列的最后一个个日期 int类型
         df_req_end = 0
 
-        if ABuEnv.g_data_fetch_mode != EMarketDataFetchMode.E_DATA_FETCH_FORCE_NET:
-            # 如果env中设置并非强制从网络获取数据，就从本地数据尝试读取df, df_req_start
-            df, df_req_start, df_req_end = load_kline_df(temp_symbol.value)
-        # 确定env中设置是否强制从本地缓存读取数据
+        # 强制从SQLite加载数据，忽略环境变量设置
+        # 导入SQLite缓存模块
+        from .ABuSQLiteCache import load_kline_from_sqlite
+        df, df_req_start, df_req_end = load_kline_from_sqlite(temp_symbol.value)
+        
+        # 确定是否强制从本地缓存读取数据
         force_local = (ABuEnv.g_data_fetch_mode == EMarketDataFetchMode.E_DATA_FETCH_FORCE_LOCAL)
 
         if force_local and df is None:
@@ -163,10 +165,12 @@ def kline_pd(symbol, data_mode, n_folds=2, start=None, end=None, save=True):
         end, end_int, df_end_int, start, start_int, df_start_int = _calc_start_end_date(df, force_local, n_folds, start,
                                                                                         end)
         save_kl_key = (temp_symbol, start_int, end_int)
+        
+        # 如果是强制走网络，直接请求使用load_kline_df_net
         if ABuEnv.g_data_fetch_mode == EMarketDataFetchMode.E_DATA_FETCH_FORCE_NET:
-            # 如果是强制走网络，直接请求使用load_kline_df_net
-            return load_kline_df_net(source, temp_symbol, n_folds=n_folds, start=start, end=end, start_int=start_int,
-                                     end_int=end_int, save=save), save_kl_key
+            df = load_kline_df_net(source, temp_symbol, n_folds=n_folds, start=start, end=end, start_int=start_int,
+                                 end_int=end_int, save=save)
+            return df, save_kl_key
 
         # 检测本地缓存数据是否满足需要，如果需要的数据在存储的数据之间，则可切片放回
         match = False
@@ -187,7 +191,7 @@ def kline_pd(symbol, data_mode, n_folds=2, start=None, end=None, save=True):
                                    end_int=end_int, save=save)
             if data_mode == EMarketDataSplitMode.E_DATA_SPLIT_UNDO:
                 # SPLIT_UNDO需要读取所有本地数据不切割返回
-                df, _, _ = load_kline_df(temp_symbol.value)
+                df, _, _ = load_kline_from_sqlite(temp_symbol.value)
         return df, save_kl_key
     except HDF5ExtError:
         # hdf5 bug
