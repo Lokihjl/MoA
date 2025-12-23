@@ -319,7 +319,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import axios from 'axios';
+import { apiService } from '../services/api';
 
 // API基础URL
 const API_BASE_URL = '/api/moA';
@@ -414,8 +414,7 @@ const isStopSelectOpen = ref(false);
 // 获取已下载的股票列表
 const fetchSymbolsList = async () => {
   try {
-    const response = await axios.get('/api/moA/data/download/symbols');
-    symbolsList.value = response.data;
+    symbolsList.value = await apiService.get('/data/download/symbols');
     // 从响应数据中提取股票代码和名称，构建股票名称映射表
     // 注意：实际API响应中可能不包含股票名称，需要根据实际情况调整
     // 如果API不返回股票名称，可以考虑添加一个新的API来获取股票名称
@@ -541,9 +540,9 @@ const showMessage = (text: string, type: 'success' | 'error' | 'info' = 'info') 
 // 获取可用模型列表
 const fetchAvailableModels = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/ml_strategy/available_models`);
-    if (response.data.success) {
-      availableModels.value = response.data.models;
+    const response = await apiService.get('/ml_strategy/available_models');
+    if (response.success) {
+      availableModels.value = response.models;
     }
   } catch (error) {
     console.error('获取可用模型失败:', error);

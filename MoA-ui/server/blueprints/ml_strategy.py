@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 # 导入数据库模型
-from models import db, MLModel, KlineData
+from ..models import db, MLModel, KlineData, StockBasic
 
 # 创建蓝图
 ml_strategy_bp = Blueprint('ml_strategy', __name__)
@@ -579,7 +579,7 @@ class MLStrategyService:
         """
         智能选股
         :param model_id: 模型ID
-        :param symbols: 备选股票列表
+        :param symbols: 备选股票列表（为空时使用所有已下载股票）
         :param top_n: 选中股票数量
         :return: 选中的股票列表
         """
@@ -592,6 +592,12 @@ class MLStrategyService:
             
             # 使用模型中保存的lookback_days参数
             lookback_days = model_wrapper.lookback_days
+            
+            # 如果symbols为空，从数据库获取所有唯一的股票代码
+            if not symbols:
+                # 从KlineData模型获取所有唯一的symbol
+                from sqlalchemy import distinct
+                symbols = [record[0] for record in KlineData.query.with_entities(distinct(KlineData.symbol)).all()]
             
             for symbol in symbols:
                 try:
@@ -661,8 +667,13 @@ class MLStrategyService:
                 prediction_proba = model_wrapper.predict_proba(x) if hasattr(model_wrapper, 'predict_proba') else None
                 
                 if prediction[0] == 1:
+                    # 查询股票名称
+                    stock_basic = StockBasic.query.filter_by(symbol=symbol).first()
+                    stock_name = stock_basic.name if stock_basic else symbol
+                    
                     stock_info = {
                         'symbol': symbol,
+                        'name': stock_name,
                         'prediction': int(prediction[0]),
                         'probability': float(prediction_proba[0][1]) if prediction_proba is not None else None,
                         'latest_price': float(kl_pd['close'].values[-1]),
@@ -804,7 +815,7 @@ def smart_pick():
     POST /ml_strategy/smart_pick
     Body: {
         "model_id": "model_1",  # 模型ID
-        "symbols": ["sz000002", "sh600036"],  # 备选股票列表
+        "symbols": ["sz000002", "sh600036"],  # 备选股票列表（为空时使用所有已下载股票）
         "top_n": 10  # 选中股票数量
     }
     """
@@ -813,7 +824,7 @@ def smart_pick():
     symbols = data.get('symbols', [])
     top_n = data.get('top_n', 10)
     
-    if not model_id or not symbols:
+    if not model_id:
         return jsonify({
             "success": False,
             "message": "缺少必要参数"

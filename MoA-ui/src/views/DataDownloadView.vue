@@ -151,7 +151,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import axios from 'axios'
+import { apiService } from '../services/api'
 
 interface DownloadParams {
   market: string
@@ -243,37 +243,40 @@ const symbolsArray = computed({
 
 // 创建下载任务
 const createDownload = async () => {
-  // 转换股票代码
   const symbolsArray = symbolsText.value.trim() 
     ? symbolsText.value.split(',').map(s => s.trim()).filter(s => s) 
     : []
   
   isCreating.value = true
   try {
-    const response = await axios.post('/api/moA/data/download', {
+    await apiService.post('/data/download', {
       ...downloadParams.value,
       symbols: symbolsArray
     })
-    // 立即刷新下载记录，查看任务状态
     fetchDownloadRecords()
-    // 清空输入
     symbolsText.value = ''
+    alert('下载任务创建成功，正在后台执行...')
   } catch (error) {
     console.error('创建下载任务失败:', error)
-    alert('创建下载任务失败')
+    let errorMsg = '创建下载任务失败，请检查网络连接或服务器状态'
+    if (typeof error === 'object' && error !== null && 'response' in error) {
+      const typedError = error as any
+      if (typedError.response && typedError.response.data && typedError.response.data.error) {
+        errorMsg = `创建下载任务失败: ${typedError.response.data.error}`
+      }
+    }
+    alert(errorMsg)
   } finally {
     isCreating.value = false
   }
 }
 
 
-
 // 获取下载记录
 const fetchDownloadRecords = async () => {
   isLoadingRecords.value = true
   try {
-    const response = await axios.get('/api/moA/data/download/records')
-    downloadRecords.value = response.data
+    downloadRecords.value = await apiService.get('/data/download/records')
   } catch (error) {
     console.error('获取下载记录失败:', error)
   } finally {
@@ -284,8 +287,7 @@ const fetchDownloadRecords = async () => {
 // 取消下载任务
 const cancelDownload = async (recordId: number) => {
   try {
-    await axios.put(`/api/moA/data/download/records/${recordId}/cancel`)
-    // 刷新下载记录
+    await apiService.put(`/data/download/records/${recordId}/cancel`)
     fetchDownloadRecords()
   } catch (error) {
     console.error('取消下载任务失败:', error)
@@ -296,8 +298,7 @@ const cancelDownload = async (recordId: number) => {
 // 重新执行下载任务
 const retryDownload = async (recordId: number) => {
   try {
-    await axios.post(`/api/moA/data/download/records/${recordId}/retry`)
-    // 刷新下载记录
+    await apiService.post(`/data/download/records/${recordId}/retry`)
     fetchDownloadRecords()
   } catch (error) {
     console.error('重新执行下载任务失败:', error)
@@ -308,8 +309,7 @@ const retryDownload = async (recordId: number) => {
 // 删除下载记录
 const deleteDownload = async (recordId: number) => {
   try {
-    await axios.delete(`/api/moA/data/download/records/${recordId}`)
-    // 刷新下载记录
+    await apiService.delete(`/data/download/records/${recordId}`)
     fetchDownloadRecords()
   } catch (error) {
     console.error('删除下载记录失败:', error)

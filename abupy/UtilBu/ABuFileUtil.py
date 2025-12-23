@@ -13,8 +13,28 @@ from contextlib import contextmanager
 
 import functools
 import pandas as pd
+import warnings
 
-from .ABuDTUtil import warnings_filter
+# 本地定义warnings_filter函数，使用延迟导入避免循环导入
+def warnings_filter(func):
+    """
+    作用范围：函数装饰器 (模块函数或者类函数)
+    功能：被装饰的函数上的警告不会打印，忽略
+    """
+    
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        warnings.simplefilter('ignore')
+        ret = func(*args, **kwargs)
+        # 延迟导入ABuEnv，避免循环导入
+        from ..CoreBu import ABuEnv
+        if not ABuEnv.g_ignore_all_warnings:
+            # 如果env中的设置不是忽略所有才恢复
+            warnings.simplefilter('default')
+        return ret
+    
+    return wrapper
+
 # noinspection PyUnresolvedReferences
 from ..CoreBu.ABuFixes import pickle, Pickler, Unpickler, as_bytes
 

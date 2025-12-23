@@ -8,13 +8,47 @@
 
 魔A (MoA) 是一个基于 abupy 量化交易库开发的现代化量化交易系统，提供完整的数据下载、查询、分析和回测功能。系统采用前后端分离架构，前端使用 Vue 3 + TypeScript，后端使用 Flask，支持多种市场数据和策略分析。
 
+### 🔄 最新更新
+- **2025-12-22**：
+  - 将ABU框架的数据获取和存储从CSV/HDF5转换为SQLite作为唯一数据源
+  - 创建了统一的`scripts/`目录，包含所有辅助脚本
+  - 创建了统一的`tests/`目录，包含所有测试文件
+  - 实现了批量下载所有A股股票数据的功能
+  - 优化了项目结构，使项目更加合理和整洁
+
+## 📁 项目结构
+
+```
+e:/source/abu/abu-master/
+├── abupy/                 # ABU框架核心代码
+├── MoA-ui/                # 魔A量化交易系统
+│   ├── src/               # 前端代码
+│   ├── server/            # 后端代码
+│   └── ...
+├── scripts/               # 辅助脚本目录
+│   ├── batch_download_all_stocks.py
+│   ├── find_moa_db.py
+│   ├── init_db.py
+│   ├── run_tests.py
+│   └── ...
+├── tests/                 # 测试文件目录
+│   ├── test_data_source.py
+│   ├── test_sqlite.py
+│   └── ...
+├── venv/                  # 虚拟环境
+├── .gitignore
+├── readme.md
+└── ...
+```
+
 ## ✨ 主要功能
 
 ### 数据功能
-- 📊 **数据下载**：从新浪财经 API 获取真实历史数据
+- 📊 **数据下载**：从新浪财经 API 获取真实历史数据，支持批量下载所有A股股票数据
 - 🔍 **数据查询**：支持多条件查询和列排序
-- 💾 **数据存储**：SQLite 数据库存储，高效可靠
+- 💾 **数据存储**：**SQLite 作为唯一数据源**，高效可靠，已将ABU框架的数据获取和存储从CSV/HDF5转换为SQLite
 - 📈 **数据可视化**：直观的数据展示和分析
+- 🚀 **批量下载**：实现了一键批量下载所有A股股票数据的功能
 
 ### 策略功能
 - 🚀 **Alpha 策略**：基于 abupy 核心模块实现 Alpha 因子策略
@@ -103,55 +137,34 @@
    - 后端 API：http://localhost:3001
    - Swagger 文档：http://localhost:3001/swagger/
 
-## 📁 项目结构
+### 📦 高级功能使用
 
+#### 批量下载所有A股股票数据
+```bash
+# 在项目根目录下运行
+python scripts/batch_download_all_stocks.py
 ```
-MoA-ui/
-├── server/                  # 后端代码
-│   ├── blueprints/          # Flask 蓝图
-│   │   ├── alpha_strategy.py       # Alpha 策略
-│   │   ├── correlation.py           # 相关性分析
-│   │   ├── data.py                  # 数据下载和查询
-│   │   ├── displacement_ratio.py    # 位移路程比分析
-│   │   ├── gap.py                   # 跳空缺口分析
-│   │   ├── golden_section.py        # 黄金分割分析
-│   │   ├── linear_fit.py            # 线性拟合分析
-│   │   ├── loopback.py              # 回测功能
-│   │   ├── ml_strategy.py           # 机器学习策略
-│   │   ├── price_change.py          # 涨跌幅分析
-│   │   ├── price_channel.py         # 价格通道分析
-│   │   ├── stock.py                 # 股票信息
-│   │   ├── strategy.py              # 策略管理
-│   │   └── trend_speed.py           # 趋势速度分析
-│   ├── config/              # 配置文件
-│   ├── models/              # 数据库模型
-│   ├── utils/               # 工具函数
-│   └── app.py               # 应用入口
-├── src/                     # 前端代码
-│   ├── views/               # 页面组件
-│   │   ├── AlphaStrategyView.vue        # Alpha 策略
-│   │   ├── ChangeAnalysisView.vue       # 涨跌幅分析
-│   │   ├── CorrelationView.vue          # 相关性分析
-│   │   ├── DataDownloadView.vue         # 数据下载
-│   │   ├── DataQueryView.vue            # 数据查询
-│   │   ├── DisplacementRatioView.vue    # 位移路程比分析
-│   │   ├── FinanceApiTestView.vue       # 财经API测试
-│   │   ├── GapAnalysisView.vue          # 跳空缺口分析
-│   │   ├── GoldenSectionView.vue        # 黄金分割分析
-│   │   ├── HomeView.vue                 # 首页
-│   │   ├── LinearFitView.vue            # 线性拟合分析
-│   │   ├── LoopBackView.vue             # 历史回测
-│   │   ├── MLStrategyView.vue           # 机器学习策略
-│   │   ├── PriceChangeView.vue          # 价格变化分析
-│   │   ├── PriceChannelView.vue         # 价格通道分析
-│   │   ├── ResistanceSupportView.vue    # 阻力位支撑位
-│   │   ├── StockInfoView.vue            # 股票信息
-│   │   └── TrendSpeedView.vue           # 趋势速度分析
-│   ├── components/          # 通用组件
-│   ├── stores/              # 状态管理
-│   ├── router/              # 路由配置
-│   └── main.ts              # 应用入口
-└── package.json             # 前端依赖
+
+#### 运行测试
+```bash
+# 运行所有测试
+python scripts/run_tests.py
+
+# 运行特定测试
+python scripts/run_tests.py tests.test_data_source
+
+# 生成测试覆盖率报告
+python scripts/run_tests.py --coverage
+```
+
+#### 初始化数据库
+```bash
+python scripts/init_db.py
+```
+
+#### 查找数据库文件
+```bash
+python scripts/find_moa_db.py
 ```
 
 ## 📖 使用说明

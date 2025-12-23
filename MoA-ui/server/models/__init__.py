@@ -9,3 +9,4 @@ from .loopback import LoopBackRecord
 from .kline import KlineData
 from .data_download import DataDownloadRecord
 from .ml_model import MLModel
+from .stock_basic import StockBasic

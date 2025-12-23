@@ -14,10 +14,29 @@ from ..CoreBu.ABuFixes import six
 from ..CoreBu.ABuBase import FreezeAttrMixin
 from ..CoreBu import ABuEnv
 from ..CoreBu.ABuEnv import EMarketTargetType, EMarketSubType
-from ..UtilBu.ABuDTUtil import singleton
 from ..UtilBu.ABuStrUtil import digit_str
 from ..MarketBu.ABuSymbol import Symbol, code_to_symbol
 from ..CrawlBu.ABuXqConsts import columns_map
+
+# 本地定义singleton函数，避免循环导入
+import functools
+
+def singleton(cls):
+    """
+    作用范围：类装饰器
+    功能：被装饰后类变成单例类
+    """
+    
+    instances = {}
+    
+    @functools.wraps(cls)
+    def get_instance(*args, **kw):
+        if cls not in instances:
+            # 不存在实例instances才进行构造
+            instances[cls] = cls(*args, **kw)
+        return instances[cls]
+    
+    return get_instance
 
 __author__ = '阿布'
 __weixin__ = 'abu_quant'

@@ -5,7 +5,7 @@ import re
 import pandas as pd
 from datetime import datetime
 from . import moA_bp
-from models import LoopBackRecord, KlineData, db
+from ..models import LoopBackRecord, KlineData, db
 
 # =================== 魔A回测相关接口 ===================
 

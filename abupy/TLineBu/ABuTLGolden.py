@@ -10,9 +10,24 @@ from __future__ import division
 from collections import namedtuple
 
 import matplotlib.pyplot as plt
+from contextlib import contextmanager
 
 from ..TLineBu import ABuTLExecute
-from ..UtilBu.ABuDTUtil import plt_show
+
+# 本地定义plt_show函数，避免循环导入
+@contextmanager
+def plt_show():
+    """
+        在conda5.00封装的matplotlib中全局rc的figsize在使用notebook并且开启直接show的模式下
+        代码中显示使用plt.show会将rc中的figsize重置，所以需要显示使用plt.show的地方，通过plt_show
+        上下文管理器进行规范控制：
+        1. 上文figsize设置ABuEnv中的全局g_plt_figsize
+        2. 下文显示调用plt.show()
+    """
+    from ..CoreBu import ABuEnv
+    plt.figure(figsize=ABuEnv.g_plt_figsize)
+    yield
+    plt.show()
 
 __author__ = '阿布'
 __weixin__ = 'abu_quant'

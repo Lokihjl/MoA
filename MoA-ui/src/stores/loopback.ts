@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
+import { apiService } from '../services/api'
 
 export interface LoopBackParams {
   initialCash: number
@@ -56,8 +56,7 @@ export const useLoopBackStore = defineStore('loopback', {
       this.isLoading = true
       this.error = null
       try {
-        const response = await axios.post('/api/moA/loopback', this.params)
-        this.result = response.data
+        this.result = await apiService.post<LoopBackResult>('/loopback', this.params)
       } catch (err) {
         this.error = '回测失败: ' + (err as Error).message
         console.error('回测失败:', err)

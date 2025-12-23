@@ -158,7 +158,7 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
         }
         
         // 调用后端API执行策略
-        const response = await fetch('http://localhost:3001/api/moA/alpha/backtest', {
+        const response = await fetch('/api/moA/alpha/backtest', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

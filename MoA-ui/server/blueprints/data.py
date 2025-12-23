@@ -4,7 +4,7 @@ import json
 import threading
 from datetime import datetime
 from . import moA_bp
-from models import DataDownloadRecord, KlineData, db
+from ..models import DataDownloadRecord, KlineData, StockBasic, db
 
 # 用于存储正在运行的下载线程
 # key: record_id, value: thread对象
@@ -43,7 +43,69 @@ def create_data_download():
         def save_kl_data_to_db(kl_df, symbol, market, data_type):
             """将ABU系统返回的K线数据保存到SQLite数据库"""
             from datetime import datetime
-            from models import db, KlineData
+            from ..models import db, KlineData, StockBasic
+            import requests
+            
+            # 确保股票名称已存储到数据库
+            existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+            if not existing_stock:
+                try:
+                    # 从新浪财经API获取股票名称
+                    if symbol.startswith('sh'):
+                        market_code = 'sh'
+                        stock_code = symbol[2:]
+                    elif symbol.startswith('sz'):
+                        market_code = 'sz'
+                        stock_code = symbol[2:]
+                    else:
+                        market_code = market
+                        stock_code = symbol
+                    
+                    # 构造新浪财经股票信息API URL
+                    stock_info_url = f'http://hq.sinajs.cn/list={market_code}{stock_code}'
+                    response = requests.get(stock_info_url, timeout=10)
+                    response.raise_for_status()
+                    
+                    # 解析新浪财经返回的股票信息
+                    stock_info = response.text
+                    stock_info = stock_info.split('"')[1]
+                    stock_name = stock_info.split(',')[0]
+                    
+                    # 创建新的股票基本信息记录
+                    stock_basic = StockBasic(
+                        symbol=symbol,
+                        name=stock_name,
+                        market=market_code
+                    )
+                    db.session.add(stock_basic)
+                    db.session.commit()
+                    print(f'从新浪财经API获取并存储了股票{symbol}的名称: {stock_name}')
+                except Exception as e:
+                    print(f'从新浪财经API获取股票{symbol}的名称时出错: {e}')
+                    try:
+                        # 尝试从ABuSymbolStock.df获取股票名称
+                        from abupy.MarketBu.ABuSymbolStock import AbuSymbolCN
+                        abu_symbol_cn = AbuSymbolCN()
+                        
+                        # 解析股票代码，去掉市场前缀
+                        stock_code = symbol[2:] if symbol.startswith('sh') or symbol.startswith('sz') else symbol
+                        
+                        stock_info = abu_symbol_cn.df[abu_symbol_cn.df['symbol'] == stock_code]
+                        if not stock_info.empty:
+                            # 使用'co_name'列获取股票名称
+                            stock_name = stock_info.iloc[0]['co_name']
+                            
+                            # 创建新的股票基本信息记录
+                            stock_basic = StockBasic(
+                                symbol=symbol,
+                                name=stock_name,
+                                market=market
+                            )
+                            db.session.add(stock_basic)
+                            db.session.commit()
+                            print(f'从ABuSymbolStock.df获取并存储了股票{symbol}的名称: {stock_name}')
+                    except Exception as e2:
+                        print(f'从ABuSymbolStock.df获取股票{symbol}的名称时出错: {e2}')
             
             # 获取数据库中的现有日期，避免重复插入
             existing_dates = db.session.query(KlineData.date).filter(
@@ -133,6 +195,62 @@ def create_data_download():
             :return: A股股票代码列表，格式如['sh600000', 'sz000001', ...]
             """
             try:
+                # 优先使用ABU框架中的AbuSymbolCN获取股票列表
+                try:
+                    from abupy.MarketBu.ABuSymbolStock import AbuSymbolCN
+                    print('尝试使用ABU框架获取A股股票列表...')
+                    abu_symbol_cn = AbuSymbolCN()
+                    all_symbols = abu_symbol_cn.all_symbol()
+                    print(f'从ABU框架获取到{len(all_symbols)}只A股股票')
+                    
+                    # 从ABU框架获取股票名称并存储到数据库
+                    print('从ABU框架获取股票名称并存储到数据库...')
+                    for idx, symbol in enumerate(all_symbols):
+                        try:
+                            # 解析股票代码，去掉市场前缀
+                            if symbol.startswith('sh'):
+                                pure_symbol = symbol[2:]
+                                market = 'sh'
+                            elif symbol.startswith('sz'):
+                                pure_symbol = symbol[2:]
+                                market = 'sz'
+                            else:
+                                continue
+                            
+                            # 从abu_symbol_cn.df中获取股票名称
+                            stock_info = abu_symbol_cn.df[abu_symbol_cn.df['symbol'] == pure_symbol]
+                            if not stock_info.empty:
+                                stock_name = stock_info.iloc[0]['name']
+                                # 检查数据库中是否已存在该股票信息
+                                existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+                                if not existing_stock:
+                                    # 创建新的股票基本信息记录
+                                    stock_basic = StockBasic(
+                                        symbol=symbol,
+                                        name=stock_name,
+                                        market=market
+                                    )
+                                    db.session.add(stock_basic)
+                                else:
+                                    # 更新现有股票信息
+                                    existing_stock.name = stock_name
+                                    existing_stock.market = market
+                                
+                                # 每100条提交一次
+                                if (idx + 1) % 100 == 0:
+                                    db.session.commit()
+                        except Exception as e:
+                            print(f'处理股票{symbol}的基本信息时出错: {e}')
+                            continue
+                    
+                    # 提交剩余的记录
+                    db.session.commit()
+                    return all_symbols
+                except Exception as abu_e:
+                    print(f'使用ABU框架获取A股股票列表失败: {abu_e}')
+                    print('尝试使用新浪财经API获取A股股票列表...')
+                
+                # ABU框架获取失败时，使用新浪财经API获取
                 import requests
                 import pandas as pd
                 
@@ -143,55 +261,204 @@ def create_data_download():
                 
                 stocks = []
                 
-                # 尝试多次请求，最多3次
-                max_retries = 3
+                # 尝试多次请求，最多5次
+                max_retries = 5
                 for retry in range(max_retries):
                     try:
                         # 配置请求头，模拟浏览器访问
                         headers = {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
                         }
                         
                         # 获取上海A股
                         print(f'尝试获取上海A股列表，第{retry+1}次...')
-                        sh_response = requests.get(sh_url, timeout=15, headers=headers)
+                        sh_response = requests.get(sh_url, timeout=20, headers=headers)
                         sh_response.raise_for_status()
                         sh_data = sh_response.json()
                         print(f'上海A股API返回数据长度: {len(sh_data)}')
                         
                         for stock in sh_data:
-                            stocks.append(f'sh{stock["symbol"]}')
+                            symbol = f'sh{stock["symbol"]}'
+                            stocks.append(symbol)
+                            # 存储股票名称到数据库
+                            try:
+                                existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+                                if not existing_stock:
+                                    stock_basic = StockBasic(
+                                        symbol=symbol,
+                                        name=stock["name"],
+                                        market='sh'
+                                    )
+                                    db.session.add(stock_basic)
+                                else:
+                                    existing_stock.name = stock["name"]
+                                    existing_stock.market = 'sh'
+                            except Exception as e:
+                                print(f'存储股票{symbol}的名称到数据库时出错: {e}')
+                                continue
                         
                         # 获取深圳A股
                         print(f'尝试获取深圳A股列表，第{retry+1}次...')
-                        sz_response = requests.get(sz_url, timeout=15, headers=headers)
+                        sz_response = requests.get(sz_url, timeout=20, headers=headers)
                         sz_response.raise_for_status()
                         sz_data = sz_response.json()
                         print(f'深圳A股API返回数据长度: {len(sz_data)}')
                         
                         for stock in sz_data:
-                            stocks.append(f'sz{stock["symbol"]}')
+                            symbol = f'sz{stock["symbol"]}'
+                            stocks.append(symbol)
+                            # 存储股票名称到数据库
+                            try:
+                                existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+                                if not existing_stock:
+                                    stock_basic = StockBasic(
+                                        symbol=symbol,
+                                        name=stock["name"],
+                                        market='sz'
+                                    )
+                                    db.session.add(stock_basic)
+                                else:
+                                    existing_stock.name = stock["name"]
+                                    existing_stock.market = 'sz'
+                            except Exception as e:
+                                print(f'存储股票{symbol}的名称到数据库时出错: {e}')
+                                continue
                         
+                        # 提交数据库事务
+                        db.session.commit()
                         break  # 成功获取数据，跳出重试循环
                     except Exception as retry_e:
                         print(f'第{retry+1}次尝试失败: {retry_e}')
                         if retry == max_retries - 1:
-                            # 最后一次尝试失败，使用默认的A股股票列表
-                            print('最后一次尝试失败，使用默认的A股股票列表')
-                            return ['sh600000', 'sh600036', 'sh600519', 'sh601398', 'sh601857',
-                                    'sz000001', 'sz000002', 'sz000858', 'sz002415', 'sz300750']
+                            # 最后一次尝试失败，使用ABuSymbolStock中的数据
+                            print('最后一次尝试失败，使用ABuSymbolStock中的数据')
+                            from abupy.MarketBu.ABuSymbolStock import AbuSymbolCN
+                            abu_symbol_cn = AbuSymbolCN()
+                            # 直接从abu_symbol_cn.df中获取股票代码
+                            sh_stocks = abu_symbol_cn.df[abu_symbol_cn.df['exchange'] == 'SH']['symbol'].tolist()
+                            sz_stocks = abu_symbol_cn.df[abu_symbol_cn.df['exchange'] == 'SZ']['symbol'].tolist()
+                            all_stocks = [f'sh{code}' for code in sh_stocks] + [f'sz{code}' for code in sz_stocks]
+                            print(f'从ABuSymbolStock.df获取到{len(all_stocks)}只A股股票')
+                            
+                            # 从ABuSymbolStock.df中获取股票名称并存储到数据库
+                            print('从ABuSymbolStock.df获取股票名称并存储到数据库...')
+                            for code in sh_stocks:
+                                symbol = f'sh{code}'
+                                stock_info = abu_symbol_cn.df[abu_symbol_cn.df['symbol'] == code]
+                                if not stock_info.empty:
+                                    stock_name = stock_info.iloc[0]['name']
+                                    try:
+                                        existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+                                        if not existing_stock:
+                                            stock_basic = StockBasic(
+                                                symbol=symbol,
+                                                name=stock_name,
+                                                market='sh'
+                                            )
+                                            db.session.add(stock_basic)
+                                        else:
+                                            existing_stock.name = stock_name
+                                            existing_stock.market = 'sh'
+                                    except Exception as e:
+                                        print(f'存储股票{symbol}的名称到数据库时出错: {e}')
+                                        continue
+                            
+                            for code in sz_stocks:
+                                symbol = f'sz{code}'
+                                stock_info = abu_symbol_cn.df[abu_symbol_cn.df['symbol'] == code]
+                                if not stock_info.empty:
+                                    stock_name = stock_info.iloc[0]['name']
+                                    try:
+                                        existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+                                        if not existing_stock:
+                                            stock_basic = StockBasic(
+                                                symbol=symbol,
+                                                name=stock_name,
+                                                market='sz'
+                                            )
+                                            db.session.add(stock_basic)
+                                        else:
+                                            existing_stock.name = stock_name
+                                            existing_stock.market = 'sz'
+                                    except Exception as e:
+                                        print(f'存储股票{symbol}的名称到数据库时出错: {e}')
+                                        continue
+                            
+                            # 提交数据库事务
+                            db.session.commit()
+                            
+                            return all_stocks if all_stocks else []
                         import time
-                        time.sleep(3)  # 等待3秒后重试
+                        time.sleep(5)  # 等待5秒后重试
                 
-                print(f'获取到A股股票数量: {len(stocks)}')
+                print(f'从新浪财经API获取到A股股票数量: {len(stocks)}')
                 return stocks
             except Exception as e:
                 print(f'获取A股股票列表失败: {e}')
                 import traceback
                 traceback.print_exc()
-                # 如果API获取失败，使用默认的A股股票列表
-                return ['sh600000', 'sh600036', 'sh600519', 'sh601398', 'sh601857',
-                        'sz000001', 'sz000002', 'sz000858', 'sz002415', 'sz300750']
+                # 最后尝试从ABuSymbolStock.df中获取
+                try:
+                    from abupy.MarketBu.ABuSymbolStock import AbuSymbolCN
+                    abu_symbol_cn = AbuSymbolCN()
+                    # 直接从abu_symbol_cn.df中获取股票代码
+                    sh_stocks = abu_symbol_cn.df[abu_symbol_cn.df['exchange'] == 'SH']['symbol'].tolist()
+                    sz_stocks = abu_symbol_cn.df[abu_symbol_cn.df['exchange'] == 'SZ']['symbol'].tolist()
+                    all_stocks = [f'sh{code}' for code in sh_stocks] + [f'sz{code}' for code in sz_stocks]
+                    print(f'从ABuSymbolStock.df获取到{len(all_stocks)}只A股股票')
+                    
+                    # 从ABuSymbolStock.df中获取股票名称并存储到数据库
+                    print('从ABuSymbolStock.df获取股票名称并存储到数据库...')
+                    for code in sh_stocks:
+                        symbol = f'sh{code}'
+                        stock_info = abu_symbol_cn.df[abu_symbol_cn.df['symbol'] == code]
+                        if not stock_info.empty:
+                            stock_name = stock_info.iloc[0]['name']
+                            try:
+                                existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+                                if not existing_stock:
+                                    stock_basic = StockBasic(
+                                        symbol=symbol,
+                                        name=stock_name,
+                                        market='sh'
+                                    )
+                                    db.session.add(stock_basic)
+                                else:
+                                    existing_stock.name = stock_name
+                                    existing_stock.market = 'sh'
+                            except Exception as e:
+                                print(f'存储股票{symbol}的名称到数据库时出错: {e}')
+                                continue
+                    
+                    for code in sz_stocks:
+                        symbol = f'sz{code}'
+                        stock_info = abu_symbol_cn.df[abu_symbol_cn.df['symbol'] == code]
+                        if not stock_info.empty:
+                            stock_name = stock_info.iloc[0]['name']
+                            try:
+                                existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+                                if not existing_stock:
+                                    stock_basic = StockBasic(
+                                        symbol=symbol,
+                                        name=stock_name,
+                                        market='sz'
+                                    )
+                                    db.session.add(stock_basic)
+                                else:
+                                    existing_stock.name = stock_name
+                                    existing_stock.market = 'sz'
+                            except Exception as e:
+                                print(f'存储股票{symbol}的名称到数据库时出错: {e}')
+                                continue
+                    
+                    # 提交数据库事务
+                    db.session.commit()
+                    
+                    return all_stocks if all_stocks else []
+                except Exception as final_e:
+                    print(f'最后尝试获取A股股票列表失败: {final_e}')
+                    # 返回空列表，让前端提示用户
+                    return []
         
         # 直接使用新浪财经API获取历史数据
         def get_historical_data_from_sina(symbol, datalen=252):
@@ -265,7 +532,7 @@ def create_data_download():
             with app.app_context():
                 try:
                     # 在后台线程中使用新的数据库会话
-                    from models import db, DataDownloadRecord
+                    from ..models import db, DataDownloadRecord
                     
                     # 创建新的数据库会话
                     db.session.rollback()
@@ -296,12 +563,65 @@ def create_data_download():
                     db.session.commit()
                     
                     # 获取已下载的股票列表
-                    symbols = download_params.get('symbols', [])
+                    current_symbols_str = current_record.symbols
+                    symbols = current_symbols_str.split(',') if current_symbols_str and current_symbols_str != 'all' else []
                     if not symbols:
                         # 如果没有指定股票，获取全A股股票列表
                         print('未指定股票，获取全A股股票列表...')
                         symbols = get_a_share_stocks()
                         print(f'获取到{len(symbols)}只A股股票')
+                    else:
+                        # 如果指定了股票，获取并存储这些股票的名称
+                        print(f'指定了{len(symbols)}只股票，获取并存储股票名称...')
+                        for symbol in symbols:
+                            try:
+                                # 从新浪财经API获取股票名称
+                                import requests
+                                import pandas as pd
+                                
+                                # 解析股票代码，去掉市场前缀
+                                if symbol.startswith('sh'):
+                                    market_code = 'sh'
+                                    stock_code = symbol[2:]
+                                elif symbol.startswith('sz'):
+                                    market_code = 'sz'
+                                    stock_code = symbol[2:]
+                                else:
+                                    continue
+                                
+                                # 构造新浪财经股票信息API URL
+                                stock_info_url = f'http://hq.sinajs.cn/list={market_code}{stock_code}'
+                                print(f'调用新浪财经股票信息API: {stock_info_url}')
+                                
+                                response = requests.get(stock_info_url, timeout=10)
+                                response.raise_for_status()
+                                
+                                # 解析新浪财经返回的股票信息
+                                stock_info = response.text
+                                # 格式：var hq_str_sh600000="浦发银行,9.89,9.90,9.88,9.93,9.87,9.88,9.89,46033123,455734186,12345,9.88,12345,9.87,12345,9.86,12345,9.85,12345,9.84,12345,9.89,12345,9.90,12345,9.91,12345,9.92,12345,9.93,2025-12-22,15:00:00,00";
+                                stock_info = stock_info.split('"')[1]
+                                stock_name = stock_info.split(',')[0]
+                                
+                                # 检查数据库中是否已存在该股票信息
+                                existing_stock = StockBasic.query.filter_by(symbol=symbol).first()
+                                if not existing_stock:
+                                    # 创建新的股票基本信息记录
+                                    stock_basic = StockBasic(
+                                        symbol=symbol,
+                                        name=stock_name,
+                                        market=market_code
+                                    )
+                                    db.session.add(stock_basic)
+                                else:
+                                    # 更新现有股票信息
+                                    existing_stock.name = stock_name
+                                    existing_stock.market = market_code
+                            except Exception as e:
+                                print(f'获取股票{symbol}的名称时出错: {e}')
+                                continue
+                        
+                        # 提交数据库事务
+                        db.session.commit()
                     
                     # 更新进度：开始数据下载
                     current_record.progress = 50
@@ -547,9 +867,13 @@ def get_downloaded_symbols():
         # 转换为前端需要的格式
         symbols_list = []
         for symbol, market in symbols:
+            # 查询股票名称
+            stock_basic = StockBasic.query.filter_by(symbol=symbol).first()
+            stock_name = stock_basic.name if stock_basic else ''
             symbols_list.append({
                 'symbol': symbol,
-                'market': market
+                'market': market,
+                'name': stock_name
             })
         
         return jsonify(symbols_list), 200
@@ -968,15 +1292,35 @@ def query_kline_data():
             end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
             query = query.filter(KlineData.date <= end_date_obj)
         
-        # 按日期倒序排序
-        query = query.order_by(KlineData.date.desc())
+        # 先按日期升序查询，方便计算涨跌幅
+        query = query.order_by(KlineData.date.asc())
         
         # 执行查询
         kline_data = query.all()
         
-        # 格式化结果
+        # 按日期降序排序返回给前端
+        kline_data.reverse()
+        
+        # 格式化结果并计算涨跌幅
         result = []
-        for data in kline_data:
+        pre_close = None
+        
+        # 先获取所有数据按日期升序，用于计算涨跌幅
+        sorted_kline_data = sorted(kline_data, key=lambda x: x.date)
+        
+        # 计算涨跌幅
+        for idx, data in enumerate(sorted_kline_data):
+            # 对于第一条数据，前收盘价使用开盘价
+            if idx == 0:
+                p_change = 0.0
+                pre_close = data.open
+            else:
+                p_change = ((data.close - pre_close) / pre_close) * 100
+            
+            # 存储当前收盘价作为下一条数据的前收盘价
+            pre_close = data.close
+            
+            # 将计算好的涨跌幅保存到字典中
             result.append({
                 'id': data.id,
                 'symbol': data.symbol,
@@ -991,9 +1335,13 @@ def query_kline_data():
                 'amount': float(data.amount) if data.amount else None,
                 'adjust': float(data.adjust) if data.adjust else None,
                 'atr21': float(data.atr21) if data.atr21 else None,
+                'p_change': round(p_change, 2),  # 添加涨跌幅字段，保留两位小数
                 'created_at': str(data.created_at),
                 'updated_at': str(data.updated_at)
             })
+        
+        # 最后按日期降序返回结果
+        result.reverse()
         
         return jsonify(result), 200
     except Exception as e:
@@ -1022,9 +1370,13 @@ def get_available_symbols():
         # 格式化结果
         result = []
         for symbol, market in symbols:
+            # 查询股票名称
+            stock_basic = StockBasic.query.filter_by(symbol=symbol).first()
+            stock_name = stock_basic.name if stock_basic else ''
             result.append({
                 'symbol': symbol,
-                'market': market
+                'market': market,
+                'name': stock_name
             })
         
         return jsonify(result), 200
@@ -1063,22 +1415,9 @@ def get_stock_basic_info():
         if previous_kline:
             change_percent = ((latest_kline.close - previous_kline.close) / previous_kline.close) * 100
         
-        # 解析股票名称（简单实现，实际应该从外部API获取）
-        stock_name_map = {
-            'sh600000': '浦发银行',
-            'sh600036': '招商银行',
-            'sh600519': '贵州茅台',
-            'sh601398': '工商银行',
-            'sh601857': '中国石油',
-            'sh601118': '海南橡胶',
-            'sz000001': '平安银行',
-            'sz000002': '万科A',
-            'sz000858': '五粮液',
-            'sz002415': '海康威视',
-            'sz300750': '宁德时代'
-        }
-        
-        stock_name = stock_name_map.get(symbol, symbol)
+        # 从StockBasic表中获取股票名称
+        stock_basic = StockBasic.query.filter_by(symbol=symbol).first()
+        stock_name = stock_basic.name if stock_basic else symbol
         
         # 格式化市场名称
         market_name_map = {

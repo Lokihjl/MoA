@@ -25,9 +25,51 @@ from ..CoreBu import ABuEnv
 from ..CoreBu.ABuBase import FreezeAttrMixin
 from ..UtilBu import ABuRegUtil
 from ..UtilBu import ABuStatsUtil
-from ..UtilBu.ABuDTUtil import arr_to_numpy
 from ..UtilBu.ABuLazyUtil import LazyFunc
-from ..UtilBu.ABuDTUtil import plt_show
+from collections import Iterable
+from contextlib import contextmanager
+
+# 本地定义arr_to_numpy和plt_show函数，避免循环导入
+# TODO 放在这里不合适，还要和ABuScalerUtil中的装饰器arr_to_numpy重复代码进行重构
+def arr_to_numpy(arr):
+    """
+        函数装饰器：将可以迭代的序列转换为np.array，支持pd.DataFrame或者pd.Series
+        ，list，dict, list，set，嵌套可迭代序列, 混嵌套可迭代序列
+    """
+    from ..CoreBu.ABuFixes import six
+    import numpy as np
+    import pandas as pd
+    
+    # TODO Iterable和six.string_types的判断抽出来放在一个模块，做为Iterable的判断来使用
+    if not isinstance(arr, Iterable) or isinstance(arr, six.string_types):
+        return arr
+
+    if not isinstance(arr, np.ndarray):
+        if isinstance(arr, pd.DataFrame) or isinstance(arr, pd.Series):
+            # 如果是pandas直接拿values
+            arr = arr.values
+        elif isinstance(arr, dict):
+            # 针对dict转换np.array
+            arr = np.array(list(arr.values())).T
+        else:
+            arr = np.array(arr)
+    return arr
+
+@contextmanager
+def plt_show():
+    """
+        在conda5.00封装的matplotlib中全局rc的figsize在使用notebook并且开启直接show的模式下
+        代码中显示使用plt.show会将rc中的figsize重置，所以需要显示使用plt.show的地方，通过plt_show
+        上下文管理器进行规范控制：
+        1. 上文figsize设置ABuEnv中的全局g_plt_figsize
+        2. 下文显示调用plt.show()
+    """
+    from matplotlib import pyplot as plt
+    from ..CoreBu import ABuEnv
+    
+    plt.figure(figsize=ABuEnv.g_plt_figsize)
+    yield
+    plt.show()
 
 __author__ = '阿布'
 __weixin__ = 'abu_quant'

@@ -17,12 +17,23 @@ from requests.packages.urllib3.exceptions import ReadTimeoutError
 """g_enable_lru_cache针对lru_cache是否开启，考虑到目前爬取的数据fetch url都会有时间戳等可变字段，所以默认关闭"""
 g_enable_lru_cache = False
 g_lru_cache_max = 300
+# 直接在本地定义空装饰器函数，避免循环导入
 if g_enable_lru_cache:
     # 开启import lru_cache
     from ..CoreBu.ABuFixes import lru_cache
 else:
-    # 导入一个空的装饰器as lru_cache
-    from ..UtilBu.ABuDTUtil import empty_wrapper_with_params as lru_cache
+    # 本地定义空装饰器函数
+    import functools
+    def lru_cache(*p_args, **p_kwargs):
+        """
+        本地定义的空装饰器，避免循环导入
+        """
+        def decorate(func):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+        return decorate
 # 设置requests库的日志级别
 logging.getLogger("requests").setLevel(logging.WARNING)
 

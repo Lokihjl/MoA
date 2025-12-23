@@ -4,8 +4,7 @@ from . import moA_bp
 import sys
 import os
 
-# 导入测试腾讯财经API的函数
-from test_tx_api import test_tx_stock_api
+# 腾讯财经API测试函数已移除，使用直接API调用
 
 # =================== 魔A股票数据相关接口 ===================
 
@@ -358,10 +357,49 @@ def get_finance_api_data(api_type, symbol):
     :param symbol: 股票代码
     """
     try:
+        import requests
         # 根据API类型调用不同的函数
         if api_type == 'tx':
-            # 调用腾讯财经API
-            stock_data = test_tx_stock_api(symbol)
+            # 直接调用腾讯财经API
+            simple_url = f'http://qt.gtimg.cn/q={symbol}'
+            response = requests.get(simple_url, timeout=5)
+            response.raise_for_status()
+            text_data = response.text
+            
+            if text_data.startswith('v_'):
+                parts = text_data.split('=')
+                if len(parts) == 2:
+                    stock_data = parts[1].strip('";\r\n')
+                    stock_fields = stock_data.split('~')
+                    if len(stock_fields) >= 45:
+                        # 提取关键信息
+                        stock_name = stock_fields[1]
+                        current_price = stock_fields[3]
+                        today_open = stock_fields[5]
+                        yesterday_close = stock_fields[4]
+                        today_high = stock_fields[33]
+                        today_low = stock_fields[34]
+                        volume = stock_fields[6]
+                        total_amount = stock_fields[7]
+                        price_change = str(float(current_price) - float(yesterday_close))
+                        change_percent = str((float(price_change) / float(yesterday_close)) * 100)
+                        turnover_rate = stock_fields[38] if len(stock_fields) > 38 else '0.0'
+                        
+                        stock_data = {
+                            'stock_name': stock_name,
+                            'stock_code': symbol,
+                            'current_price': current_price,
+                            'today_open': today_open,
+                            'yesterday_close': yesterday_close,
+                            'today_high': today_high,
+                            'today_low': today_low,
+                            'volume': volume,
+                            'total_amount': total_amount,
+                            'price_change': price_change,
+                            'change_percent': change_percent,
+                            'turnover_rate': turnover_rate,
+                            'api_type': 'tx'
+                        }
         elif api_type == 'sina':
             # 新浪财经API暂未实现，返回模拟数据
             stock_data = {

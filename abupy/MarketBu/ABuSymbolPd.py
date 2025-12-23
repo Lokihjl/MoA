@@ -262,8 +262,8 @@ def make_kl_df(symbol, data_mode=ABuEnv.EMarketDataSplitMode.E_DATA_SPLIT_SE,
     """
 
     if isinstance(symbol, (list, tuple, pd.Series, pd.Index)):
-        # 如果symbol是可迭代的序列对象，最终返回三维面板数据pd.Panel
-        panel = dict()
+        # 如果symbol是可迭代的序列对象，返回字典，key为股票代码，value为对应的DataFrame
+        result_dict = dict()
         if parallel:
             # 如果并行获取
             if ABuEnv.g_data_fetch_mode != EMarketDataFetchMode.E_DATA_FETCH_FORCE_NET \
@@ -277,8 +277,8 @@ def make_kl_df(symbol, data_mode=ABuEnv.EMarketDataSplitMode.E_DATA_SPLIT_SE,
                 for key_tuple, df in df_dict.values():
                     if df is None or df.shape[0] == 0:
                         continue
-                    # 即丢弃原始df_dict保存金融时间序列时使用的save_kl_key，只保留df，赋予panel
-                    panel[key_tuple[0].value] = df
+                    # 即丢弃原始df_dict保存金融时间序列时使用的save_kl_key，只保留df，赋予result_dict
+                    result_dict[key_tuple[0].value] = df
         else:
             def _batch_make_kl_df():
                 with AbuMulPidProgress(len(symbol), '_make_kl_df complete') as progress:
@@ -287,15 +287,15 @@ def make_kl_df(symbol, data_mode=ABuEnv.EMarketDataSplitMode.E_DATA_SPLIT_SE,
                                              n_folds=n_folds, start=start, end=end, benchmark=benchmark, save=True)
                         if show_progress:
                             progress.show()
-                        # TODO 做pd.Panel数据应该保证每一个元素的行数和列数都相等，不是简单的有数据就行
+                        # TODO 做字典数据应该保证每一个元素的行数和列数都相等，不是简单的有数据就行
                         if _df is None or _df.shape[0] == 0:
                             continue
 
-                        panel[symbol[pos]] = _df
+                        result_dict[symbol[pos]] = _df
 
             _batch_make_kl_df()
-        # TODO pd.Panel过时
-        return pd.Panel(panel)
+        # 返回字典而不是pd.Panel（已被废弃）
+        return result_dict
 
     elif isinstance(symbol, Symbol) or isinstance(symbol, six.string_types):
         # 对单个symbol进行数据获取

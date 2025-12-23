@@ -25,8 +25,26 @@ from ..CoreBu.ABuEnv import EMarketDataSplitMode, EMarketTargetType
 from ..MarketBu import ABuSymbolPd
 from ..MarketBu.ABuMarket import split_k_market, all_symbol
 from ..MarketBu.ABuSymbol import IndexSymbol, Symbol
-from ..UtilBu.ABuDTUtil import consume_time
 from ..UtilBu.ABuProgress import do_clear_output
+import functools
+import time
+
+# 本地定义consume_time函数，避免循环导入
+def consume_time(func):
+    """
+    作用范围：函数装饰器 (模块函数或者类函数)
+    功能：简单统计被装饰函数运行时间
+    """
+    
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print('{} cost {}s'.format(func.__name__, round(end_time - start_time, 3)))
+        return result
+    
+    return wrapper
 from ..CoreBu.ABuEnvProcess import add_process_env_sig, AbuEnvProcess
 # noinspection PyUnresolvedReferences
 from ..CoreBu.ABuFixes import xrange

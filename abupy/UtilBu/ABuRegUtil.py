@@ -15,11 +15,25 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from statsmodels import api as sm, regression
 from sklearn import metrics
+from contextlib import contextmanager
 
 from ..CoreBu import ABuEnv
 from ..CoreBu.ABuPdHelper import pd_rolling_mean
-from ..UtilBu.ABuDTUtil import plt_show
 from ..UtilBu.ABuStatsUtil import euclidean_distance_xy, manhattan_distances_xy, cosine_distances_xy
+
+# 本地定义plt_show函数，避免循环导入
+@contextmanager
+def plt_show():
+    """
+        在conda5.00封装的matplotlib中全局rc的figsize在使用notebook并且开启直接show的模式下
+        代码中显示使用plt.show会将rc中的figsize重置，所以需要显示使用plt.show的地方，通过plt_show
+        上下文管理器进行规范控制：
+        1. 上文figsize设置ABuEnv中的全局g_plt_figsize
+        2. 下文显示调用plt.show()
+    """
+    plt.figure(figsize=ABuEnv.g_plt_figsize)
+    yield
+    plt.show()
 
 
 log_func = logging.info if ABuEnv.g_is_ipython else print

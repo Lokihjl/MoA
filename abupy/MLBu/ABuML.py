@@ -27,9 +27,70 @@ from ..CoreBu import ABuEnv
 from ..CoreBu.ABuFixes import train_test_split, cross_val_score, mean_squared_error_scorer, six
 from ..UtilBu import ABuFileUtil
 from ..UtilBu.ABuProgress import AbuProgress
-from ..UtilBu.ABuDTUtil import warnings_filter
-from ..UtilBu.ABuDTUtil import params_to_numpy
 from ..CoreBu.ABuFixes import signature
+
+# 本地定义warnings_filter、arr_to_numpy和params_to_numpy函数，避免循环导入
+import functools
+import warnings
+from collections import Iterable
+import numpy as np
+import pandas as pd
+
+# 本地定义warnings_filter函数
+def warnings_filter(func):
+    """
+    作用范围：函数装饰器 (模块函数或者类函数)
+    功能：被装饰的函数上的警告不会打印，忽略
+    """
+    
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        warnings.simplefilter('ignore')
+        ret = func(*args, **kwargs)
+        if not ABuEnv.g_ignore_all_warnings:
+            # 如果env中的设置不是忽略所有才恢复
+            warnings.simplefilter('default')
+        return ret
+    
+    return wrapper
+
+# 本地定义arr_to_numpy函数
+def arr_to_numpy(arr):
+    """
+        函数装饰器：将可以迭代的序列转换为np.array，支持pd.DataFrame或者pd.Series
+        ，list，dict, list，set，嵌套可迭代序列, 混嵌套可迭代序列
+    """
+    # TODO Iterable和six.string_types的判断抽出来放在一个模块，做为Iterable的判断来使用
+    if not isinstance(arr, Iterable) or isinstance(arr, six.string_types):
+        return arr
+
+    if not isinstance(arr, np.ndarray):
+        if isinstance(arr, pd.DataFrame) or isinstance(arr, pd.Series):
+            # 如果是pandas直接拿values
+            arr = arr.values
+        elif isinstance(arr, dict):
+            # 针对dict转换np.array
+            arr = np.array(list(arr.values())).T
+        else:
+            arr = np.array(arr)
+    return arr
+
+# 本地定义params_to_numpy函数
+def params_to_numpy(func):
+    """
+        函数装饰器：不定参数装饰器，定参数转换使用ABuScalerUtil中的装饰器arr_to_numpy(func)
+        将被装饰函数中的参数中所有可以迭代的序列转换为np.array
+    """
+
+    @functools.wraps(func)
+    def wrapper(*arg, **kwargs):
+        # 把arg中的可迭代序列转换为np.array
+        arg_list = [arr_to_numpy(param) for param in arg]
+        # 把kwargs中的可迭代序列转换为np.array
+        arg_dict = {param_key: arr_to_numpy(kwargs[param_key]) for param_key in kwargs}
+        return func(*arg_list, **arg_dict)
+
+    return wrapper
 
 __author__ = '阿布'
 __weixin__ = 'abu_quant'

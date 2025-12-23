@@ -1,6 +1,6 @@
 # Swagger配置
 from flask_swagger_ui import get_swaggerui_blueprint
-from config.config import SWAGGER_URL, API_URL
+from ..config.config import SWAGGER_URL, API_URL
 from flask import jsonify
 
 # 创建Swagger UI Blueprint

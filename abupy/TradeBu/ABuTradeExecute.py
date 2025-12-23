@@ -12,7 +12,8 @@ import logging
 import numpy as np
 import pandas as pd
 
-from ..UtilBu import ABuDateUtil, AbuProgress
+from ..UtilBu import ABuDateUtil
+from ..UtilBu.ABuProgress import AbuProgress
 from ..TradeBu.ABuMLFeature import AbuMlFeature
 # noinspection PyUnresolvedReferences
 from ..CoreBu.ABuFixes import map

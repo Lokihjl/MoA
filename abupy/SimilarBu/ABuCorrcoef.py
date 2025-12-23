@@ -13,11 +13,29 @@ import scipy.stats as stats
 
 from enum import Enum
 
-from ..UtilBu import ABuDTUtil
+import functools
+import time
 from ..CoreBu.ABuFixes import rankdata
 from ..CoreBu.ABuPdHelper import pd_rolling_corr
 # noinspection PyUnresolvedReferences
 from ..CoreBu.ABuFixes import zip
+
+# 本地定义consume_time函数，避免循环导入
+def consume_time(func):
+    """
+    作用范围：函数装饰器 (模块函数或者类函数)
+    功能：简单统计被装饰函数运行时间
+    """
+    
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print('{} cost {}s'.format(func.__name__, round(end_time - start_time, 3)))
+        return result
+    
+    return wrapper
 
 
 class ECoreCorrType(Enum):
@@ -118,7 +136,7 @@ def corr_matrix(df, similar_type=ECoreCorrType.E_CORE_TYPE_PEARS, **kwargs):
     return corr
 
 
-@ABuDTUtil.consume_time
+@consume_time
 def rolling_corr(df, ss=None, window=g_rolling_corr_window):
     """
     滑动窗口按时间权重计算相关系数

@@ -92,6 +92,16 @@ const router = createRouter({
       path: '/distance-ratio',
       name: 'distance-ratio',
       component: () => import('../views/DisplacementRatioView.vue')
+    },
+    {
+      path: '/ai-quant-features',
+      name: 'ai-quant-features',
+      component: () => import('../views/AIQuantFeaturesView.vue')
+    },
+    {
+      path: '/ai-quant-workbench',
+      name: 'ai-quant-workbench',
+      component: () => import('../views/AIQuantWorkbenchView.vue')
     }
   ]
 })

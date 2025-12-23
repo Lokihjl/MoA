@@ -413,6 +413,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import * as echarts from 'echarts';
+import { apiService } from '../services/api';
 
 // 状态管理
 const activeTab = ref('single');
@@ -465,33 +466,7 @@ const compareResult = ref<any>(null);
 const fitChartRef = ref<HTMLElement | null>(null);
 let fitChart: echarts.ECharts | null = null;
 
-// API请求函数
-const fetchApi = async (url: string, options: any = {}) => {
-  isLoading.value = true;
-  error.value = '';
-  
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `请求失败: ${response.status}`);
-    }
-    
-    return await response.json();
-  } catch (err: any) {
-    error.value = err.message;
-    throw err;
-  } finally {
-    isLoading.value = false;
-  }
-};
+// API请求函数已移除，替换为apiService
 
 // 获取单个股票线性拟合分析
 const getSingleLinearFit = async () => {
@@ -501,14 +476,14 @@ const getSingleLinearFit = async () => {
   }
   
   try {
-    const params = new URLSearchParams({
+    isLoading.value = true;
+    error.value = '';
+    const result = await apiService.get('/linear-fit/single', {
       symbol: singleParams.value.symbol,
-      poly: singleParams.value.poly.toString(),
+      poly: singleParams.value.poly,
       metric: singleParams.value.metric,
-      n_folds: singleParams.value.n_folds.toString()
+      n_folds: singleParams.value.n_folds
     });
-    
-    const result = await fetchApi(`/api/moA/linear-fit/single?${params}`);
     singleResult.value = result;
     
     // 绘制拟合图表
@@ -516,6 +491,8 @@ const getSingleLinearFit = async () => {
     drawFitChart(result);
   } catch (err) {
     console.error('获取单个股票线性拟合分析失败:', err);
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -532,18 +509,20 @@ const getBestPoly = async () => {
   }
   
   try {
-    const params = new URLSearchParams({
+    isLoading.value = true;
+    error.value = '';
+    const result = await apiService.get('/linear-fit/best-poly', {
       symbol: bestPolyParams.value.symbol,
-      poly_min: bestPolyParams.value.poly_min.toString(),
-      poly_max: bestPolyParams.value.poly_max.toString(),
+      poly_min: bestPolyParams.value.poly_min,
+      poly_max: bestPolyParams.value.poly_max,
       metric: bestPolyParams.value.metric,
-      n_folds: bestPolyParams.value.n_folds.toString()
+      n_folds: bestPolyParams.value.n_folds
     });
-    
-    const result = await fetchApi(`/api/moA/linear-fit/best-poly?${params}`);
     bestPolyResult.value = result;
   } catch (err) {
     console.error('获取最佳多项式拟合次数失败:', err);
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -565,19 +544,20 @@ const getCompareLinearFit = async () => {
       return;
     }
     
-    const result = await fetchApi('/api/moA/linear-fit/compare', {
-      method: 'POST',
-      body: JSON.stringify({
-        symbols: symbols,
-        poly: compareParams.value.poly,
-        metric: compareParams.value.metric,
-        n_folds: compareParams.value.n_folds
-      })
+    isLoading.value = true;
+    error.value = '';
+    const result = await apiService.post('/linear-fit/compare', {
+      symbols: symbols,
+      poly: compareParams.value.poly,
+      metric: compareParams.value.metric,
+      n_folds: compareParams.value.n_folds
     });
     
     compareResult.value = result;
   } catch (err) {
     console.error('获取多只股票线性拟合比较失败:', err);
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -765,20 +745,10 @@ const handleClickOutside = (event: MouseEvent) => {
 // 获取已下载的股票列表
 const fetchSymbolsList = async () => {
   try {
-    const response = await fetch('/api/moA/data/download/symbols');
-    if (response.ok) {
-      const data = await response.json();
-      symbolsList.value = data;
-    } else {
-      // 如果API请求失败，使用默认股票列表
-      symbolsList.value = [
-        { symbol: 'sh600000', market: 'cn' },
-        { symbol: 'sh600036', market: 'cn' },
-        { symbol: 'sh600519', market: 'cn' },
-        { symbol: 'sz000001', market: 'cn' },
-        { symbol: 'sz000858', market: 'cn' }
-      ];
-    }
+    isLoading.value = true;
+    error.value = '';
+    const data = await apiService.get('/data/download/symbols');
+    symbolsList.value = data;
   } catch (error) {
     console.error('获取已下载股票列表失败:', error);
     // 使用默认股票列表
@@ -789,6 +759,8 @@ const fetchSymbolsList = async () => {
       { symbol: 'sz000001', market: 'cn' },
       { symbol: 'sz000858', market: 'cn' }
     ];
+  } finally {
+    isLoading.value = false;
   }
 };
 

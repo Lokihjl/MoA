@@ -18,9 +18,53 @@ from ipywidgets import FloatProgress, Text, Box
 from ..CoreBu import ABuEnv
 # noinspection PyUnresolvedReferences
 from ..CoreBu.ABuFixes import filter
-from ..UtilBu.ABuDTUtil import warnings_filter, catch_error
 from ..UtilBu import ABuFileUtil, ABuOsUtil
 from ..CoreBu.ABuParallel import run_in_subprocess, run_in_thread
+
+# 本地定义warnings_filter和catch_error函数，避免循环导入
+import functools
+import logging
+import warnings
+
+
+def warnings_filter(func):
+    """
+    作用范围：函数装饰器 (模块函数或者类函数)
+    功能：被装饰的函数上的警告不会打印，忽略
+    """
+    
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        warnings.simplefilter('ignore')
+        ret = func(*args, **kwargs)
+        if not ABuEnv.g_ignore_all_warnings:
+            # 如果env中的设置不是忽略所有才恢复
+            warnings.simplefilter('default')
+        return ret
+    
+    return wrapper
+
+
+def catch_error(return_val=None, log=True):
+    """
+    作用范围：函数装饰器 (模块函数或者类函数)
+    功能：捕获被装饰的函数中所有异常，即忽略函数中所有的问题，用在函数的执行级别低，且不需要后续处理
+    :param return_val: 异常后返回的值
+    :param log: 是否打印错误日志
+    """
+    
+    def decorate(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logging.exception(e) if log else logging.debug(e)
+                return return_val
+        
+        return wrapper
+    
+    return decorate
 
 __author__ = '阿布'
 __weixin__ = 'abu_quant'

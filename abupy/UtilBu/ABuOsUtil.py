@@ -8,7 +8,31 @@ from __future__ import division
 import logging
 
 from ..CoreBu import ABuEnv
-from ..UtilBu.ABuDTUtil import catch_error
+
+# 本地定义catch_error函数，避免循环导入
+import functools
+import logging
+
+def catch_error(return_val=None, log=True):
+    """
+    作用范围：函数装饰器 (模块函数或者类函数)
+    功能：捕获被装饰的函数中所有异常，即忽略函数中所有的问题，用在函数的执行级别低，且不需要后续处理
+    :param return_val: 异常后返回的值
+    :param log: 是否打印错误日志
+    """
+    
+    def decorate(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logging.exception(e) if log else logging.debug(e)
+                return return_val
+        
+        return wrapper
+    
+    return decorate
 
 log_func = logging.info if ABuEnv.g_is_ipython else print
 

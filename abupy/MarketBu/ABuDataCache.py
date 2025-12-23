@@ -122,7 +122,7 @@ def save_kline_df(df, temp_symbol, start_int, end_int):
 
 def load_kline_df_net(source, temp_symbol, n_folds, start, end, start_int, end_int, save):
     """
-    通过网络请求数据源，获取temp_symbol以及参数时间日期对应的金融时间序列pd.DataFrame对象
+    禁用网络请求，只使用本地SQLite数据，确保所有数据都从下载模块获取
     :param source: 数据源BaseMarket的子类，非实例化对象
     :param temp_symbol: Symbol类对象
     :param n_folds: 需要获取几年的回测数据，int
@@ -132,20 +132,6 @@ def load_kline_df_net(source, temp_symbol, n_folds, start, end, start_int, end_i
     :param end_int: 结束回测日期，int
     :param save: 是否从网络成功获取数据后进行数据的保存
     """
-    df = None
-    # 实例化数据源对象
-    data_source = source(temp_symbol)
-
-    if data_source.check_support():
-        # 通过数据源混入的SupportMixin类检测数据源是否支持temp_symbol对应的市场数据
-        df = data_source.kline(n_folds=n_folds, start=start, end=end)
-
-    if df is not None and save:
-        """
-            这里的start_int， end_int会记作下次读取的df_req_start, df_req_end，即就是没有完整的数据返回，也可通过索引匹配上，
-            即如果今天刚刚请求了直到今天为止的数据，但是数据源没有返回到今天的数据，今天的还没有，但是由于记录了end_int为今天，所以
-            再次发起请求时不会走网络，会从本地获取数据
-        """
-        df_key = _kl_unique_key(temp_symbol, start_int, end_int)
-        dump_kline_df(df, temp_symbol.value, df_key)
-    return df
+    # 禁用网络请求，直接返回None
+    print(f"网络请求已禁用，只使用本地数据。请先使用数据下载模块下载{temp_symbol.value}的数据")
+    return None

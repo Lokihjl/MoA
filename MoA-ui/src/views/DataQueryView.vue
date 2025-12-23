@@ -117,7 +117,7 @@
             </div>
             <div class="info-item">
               <span class="info-label">当前价格</span>
-              <span class="info-value">{{ stockBasicInfo.currentPrice?.toFixed(2) || '-' }}</span>
+              <span class="info-value">¥{{ stockBasicInfo.currentPrice?.toFixed(2) || '-' }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">涨跌幅</span>
@@ -254,10 +254,10 @@
             <tbody>
               <tr v-for="(item, index) in klineData" :key="index">
                 <td>{{ formatDate(item.date) }}</td>
-                <td>{{ item.open.toFixed(2) }}</td>
-                <td>{{ item.high.toFixed(2) }}</td>
-                <td>{{ item.low.toFixed(2) }}</td>
-                <td>{{ item.close.toFixed(2) }}</td>
+                <td>¥{{ item.open.toFixed(2) }}</td>
+                <td>¥{{ item.high.toFixed(2) }}</td>
+                <td>¥{{ item.low.toFixed(2) }}</td>
+                <td>¥{{ item.close.toFixed(2) }}</td>
                 <td>{{ formatVolume(item.volume) }}</td>
                 <td>{{ formatAmount(item.amount) }}</td>
               </tr>
@@ -277,7 +277,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
-import axios from 'axios'
+import { apiService } from '../services/api'
 import * as echarts from 'echarts'
 
 // 查询参数
@@ -563,26 +563,38 @@ const updateKlineChart = () => {
     })
     
     // 准备K线图数据
-    const dates = sortedData.map(item => item.date)
-    const closePrices = sortedData.map(item => parseFloat(item.close.toFixed(2)))
-    
-    const candlestickData = sortedData.map(item => [
-      parseFloat(item.open.toFixed(2)),
-      parseFloat(item.close.toFixed(2)),
-      parseFloat(item.low.toFixed(2)),
-      parseFloat(item.high.toFixed(2))
-    ])
-    
-    const volumeData = sortedData.map(item => {
-      const open = parseFloat(item.open.toFixed(2))
-      const close = parseFloat(item.close.toFixed(2))
-      return {
-        value: item.volume,
-        itemStyle: {
-          color: close >= open ? '#ef5350' : '#26a69a'
-        }
-      }
-    })
+        const dates = sortedData.map(item => item.date)
+        const closePrices = sortedData.map(item => parseFloat(item.close.toFixed(2)))
+        
+        const candlestickData = sortedData.map(item => [
+          parseFloat(item.open.toFixed(2)),
+          parseFloat(item.close.toFixed(2)),
+          parseFloat(item.low.toFixed(2)),
+          parseFloat(item.high.toFixed(2))
+        ])
+        
+        // 创建包含涨跌幅的数据数组，用于tooltip显示
+        const fullKlineData = sortedData.map(item => ({
+          date: item.date,
+          open: parseFloat(item.open.toFixed(2)),
+          close: parseFloat(item.close.toFixed(2)),
+          low: parseFloat(item.low.toFixed(2)),
+          high: parseFloat(item.high.toFixed(2)),
+          volume: item.volume,
+          amount: item.amount,
+          p_change: item.p_change // 涨跌幅数据
+        }))
+        
+        const volumeData = sortedData.map(item => {
+          const open = parseFloat(item.open.toFixed(2))
+          const close = parseFloat(item.close.toFixed(2))
+          return {
+            value: item.volume,
+            itemStyle: {
+              color: close >= open ? '#ef5350' : '#26a69a'
+            }
+          }
+        })
     
     // 计算所有可见均线数据
     const allMAs = [...presetMAs.value]
@@ -655,7 +667,59 @@ const updateKlineChart = () => {
       tooltip: {
         trigger: 'axis',
         axisPointer: {
-          type: 'cross'
+          type: 'cross',
+          crossStyle: {
+            color: '#999'
+          }
+        },
+        formatter: function(params) {
+          // 自定义tooltip显示，包含涨跌幅
+          // 格式化成交量
+          const formatVolume = (volume) => {
+            if (volume >= 100000000) {
+              return (volume / 100000000).toFixed(2) + '亿'
+            } else if (volume >= 10000) {
+              return (volume / 10000).toFixed(2) + '万'
+            } else {
+              return volume.toString()
+            }
+          }
+          
+          // 格式化成交额
+          const formatAmount = (amount) => {
+            if (!amount) return '-'
+            if (amount >= 100000000) {
+              return (amount / 100000000).toFixed(2) + '亿'
+            } else if (amount >= 10000) {
+              return (amount / 10000).toFixed(2) + '万'
+            } else {
+              return amount.toFixed(2)
+            }
+          }
+          
+          if (params && params.length > 0) {
+            const date = params[0].axisValue
+            const klineData = fullKlineData.find(item => item.date === date)
+            
+            if (klineData) {
+                let html = `<div style="padding: 10px;">`
+                html += `<div style="font-weight: bold; margin-bottom: 5px;">${date}</div>`
+                html += `<div style="margin: 3px 0;">开盘: ¥${klineData.open}</div>`
+                html += `<div style="margin: 3px 0;">收盘: ¥${klineData.close}</div>`
+                html += `<div style="margin: 3px 0;">最低: ¥${klineData.low}</div>`
+                html += `<div style="margin: 3px 0;">最高: ¥${klineData.high}</div>`
+                html += `<div style="margin: 3px 0;">成交量: ${formatVolume(klineData.volume)}</div>`
+                html += `<div style="margin: 3px 0;">成交额: ${formatAmount(klineData.amount)}</div>`
+                
+                // 添加涨跌幅，根据正负值显示不同颜色
+                const pChangeColor = klineData.p_change >= 0 ? '#e74c3c' : '#27ae60'
+                const pChangeSign = klineData.p_change >= 0 ? '+' : ''
+                html += `<div style="margin: 3px 0; color: ${pChangeColor};">涨跌幅: ${pChangeSign}${klineData.p_change}%</div>`
+                html += `</div>`
+                return html
+              }
+          }
+          return ''
         }
       },
       legend: {
@@ -807,8 +871,7 @@ const initDateRange = () => {
 // 获取已下载的股票列表
 const fetchSymbolsList = async () => {
   try {
-    const response = await axios.get('/api/moA/data/symbols')
-    symbolsList.value = response.data
+    symbolsList.value = await apiService.get('/data/symbols')
   } catch (error) {
     console.error('获取已下载股票列表失败:', error)
   }
@@ -862,17 +925,12 @@ const sortData = (key: string) => {
 // 获取股票基本信息
 const fetchStockBasicInfo = async (symbol: string, market: string) => {
   try {
-    // 调用API获取股票基本信息
-    const response = await axios.get('/api/moA/data/stock_basic', {
-      params: {
-        symbol,
-        market
-      }
+    stockBasicInfo.value = await apiService.get('/data/stock_basic', {
+      symbol,
+      market
     })
-    stockBasicInfo.value = response.data
   } catch (error) {
     console.error('获取股票基本信息失败:', error)
-    // 如果获取失败，清空基本信息
     stockBasicInfo.value = {}
   }
 }
@@ -884,14 +942,11 @@ const queryData = async () => {
   stockBasicInfo.value = {}
   
   try {
-    // 销毁现有图表实例，确保切换股票时能重新初始化
     if (klineChart) {
-
       klineChart.dispose()
       klineChart = null
     }
     
-    // 构建查询参数
     const params: any = {
       data_type: queryParams.value.data_type
     }
@@ -912,23 +967,16 @@ const queryData = async () => {
       params.end_date = queryParams.value.end_date
     }
     
-    // 调用API查询数据
-    const response = await axios.get('/api/moA/data/kline', { params })
-    originalKlineData.value = response.data
+    originalKlineData.value = await apiService.get('/data/kline', params)
     
-    // 应用排序
     sortConfig.value.key = 'date'
     sortConfig.value.direction = 'desc'
     klineData.value = [...originalKlineData.value]
     
-    // 获取股票基本信息
     if (queryParams.value.symbol) {
       await fetchStockBasicInfo(queryParams.value.symbol, queryParams.value.market)
     }
-    
 
-    
-    // 重新初始化K线图
     setTimeout(() => {
       initKlineChart()
     }, 100)

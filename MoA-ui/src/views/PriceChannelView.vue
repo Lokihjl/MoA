@@ -208,6 +208,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import * as echarts from 'echarts';
+import { apiService } from '../services/api';
 
 // 状态管理
 const activeTab = ref('single');
@@ -247,33 +248,7 @@ const compareResult = ref<any>(null);
 const channelChartRef = ref<HTMLElement | null>(null);
 let channelChart: echarts.ECharts | null = null;
 
-// API请求函数
-const fetchApi = async (url: string, options: any = {}) => {
-  isLoading.value = true;
-  error.value = '';
-  
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `请求失败: ${response.status}`);
-    }
-    
-    return await response.json();
-  } catch (err: any) {
-    error.value = err.message;
-    throw err;
-  } finally {
-    isLoading.value = false;
-  }
-};
+// API请求函数已移除，替换为apiService
 
 // 获取单个股票价格通道分析
 const getSinglePriceChannel = async () => {
@@ -283,13 +258,13 @@ const getSinglePriceChannel = async () => {
   }
   
   try {
-    const params = new URLSearchParams({
+    isLoading.value = true;
+    error.value = '';
+    const result = await apiService.get('/price-channel/single', {
       symbol: singleParams.value.symbol,
       channel_type: singleParams.value.channel_type,
-      n_folds: singleParams.value.n_folds.toString()
+      n_folds: singleParams.value.n_folds
     });
-    
-    const result = await fetchApi(`/api/moA/price-channel/single?${params}`);
     singleResult.value = result;
     
     // 绘制价格通道图表
@@ -297,6 +272,8 @@ const getSinglePriceChannel = async () => {
     drawChannelChart(result);
   } catch (err) {
     console.error('获取单个股票价格通道分析失败:', err);
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -318,18 +295,19 @@ const getComparePriceChannel = async () => {
       return;
     }
     
-    const result = await fetchApi('/api/moA/price-channel/compare', {
-      method: 'POST',
-      body: JSON.stringify({
-        symbols: symbols,
-        channel_type: compareParams.value.channel_type,
-        n_folds: compareParams.value.n_folds
-      })
+    isLoading.value = true;
+    error.value = '';
+    const result = await apiService.post('/price-channel/compare', {
+      symbols: symbols,
+      channel_type: compareParams.value.channel_type,
+      n_folds: compareParams.value.n_folds
     });
     
     compareResult.value = result;
   } catch (err) {
     console.error('获取多只股票价格通道比较失败:', err);
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -604,20 +582,10 @@ const handleClickOutside = (event: MouseEvent) => {
 // 获取已下载的股票列表
 const fetchSymbolsList = async () => {
   try {
-    const response = await fetch('/api/moA/data/download/symbols');
-    if (response.ok) {
-      const data = await response.json();
-      symbolsList.value = data;
-    } else {
-      // 如果API请求失败，使用默认股票列表
-      symbolsList.value = [
-        { symbol: 'sh600000', market: 'cn' },
-        { symbol: 'sh600036', market: 'cn' },
-        { symbol: 'sh600519', market: 'cn' },
-        { symbol: 'sz000001', market: 'cn' },
-        { symbol: 'sz000858', market: 'cn' }
-      ];
-    }
+    isLoading.value = true;
+    error.value = '';
+    const data = await apiService.get('/data/download/symbols');
+    symbolsList.value = data;
   } catch (error) {
     console.error('获取已下载股票列表失败:', error);
     // 使用默认股票列表
@@ -628,6 +596,8 @@ const fetchSymbolsList = async () => {
       { symbol: 'sz000001', market: 'cn' },
       { symbol: 'sz000858', market: 'cn' }
     ];
+  } finally {
+    isLoading.value = false;
   }
 };
 

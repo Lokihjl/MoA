@@ -23,10 +23,34 @@ from ..MarketBu import ABuNetWork
 from ..MarketBu.ABuDataBase import StockBaseMarket, SupportMixin
 from ..MarketBu.ABuDataParser import BDParser, TXParser
 from ..UtilBu import ABuStrUtil, ABuDateUtil, ABuMd5
-from ..UtilBu.ABuDTUtil import catch_error
 from ..CoreBu.ABuDeprecated import AbuDeprecated
 # noinspection PyUnresolvedReferences
 from ..CoreBu.ABuFixes import xrange, range, filter
+
+# 本地定义catch_error函数，避免循环导入
+import functools
+import logging
+
+def catch_error(return_val=None, log=True):
+    """
+    作用范围：函数装饰器 (模块函数或者类函数)
+    功能：捕获被装饰的函数中所有异常，即忽略函数中所有的问题，用在函数的执行级别低，且不需要后续处理
+    :param return_val: 异常后返回的值
+    :param log: 是否打印错误日志
+    """
+    
+    def decorate(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logging.exception(e) if log else logging.debug(e)
+                return return_val
+        
+        return wrapper
+    
+    return decorate
 
 """网络请求（连接10秒，接收60秒）超时时间"""
 K_TIME_OUT = (10, 60)

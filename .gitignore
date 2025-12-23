@@ -1,9 +1,50 @@
+# Python项目忽略项
+__pycache__/
+*.egg-info/
+build/
+dist/
+*.log
+*.swp
+.env
+.venv
+venv/
+
+# Vue/前端项目忽略项
+/MoA-ui/node_modules/
+/MoA-ui/dist/
+/MoA-ui/.vite/
+/MoA-ui/.npm/
+/MoA-ui/*.local
+/MoA-ui/.env
+/MoA-ui/.env.local
+/MoA-ui/.env.*.local
+
+# Flask后端忽略项
+/MoA-ui/server/instance/
+/MoA-ui/server/*.sqlite
+/MoA-ui/server/.flaskenv
+/MoA-ui/server/.env
+
+# 项目特定忽略项
+/abupy/RomDataBu/df_kl.h5
+/scripts/__pycache__/
+/tests/__pycache__/
+*.db
+
+# 编辑器和系统文件
 .ipynb_checkpoints*
 .idea
 .DS_Store
-logging.log
-p.sh
-*.pyc
-tmp
-test.py
-/abupy/RomDataBu/df_kl.h5
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# 临时文件和目录
+tmp/
+temp/
+*.tmp
+*.temp
+
+# 自定义脚本生成的文件
+/test.py
+/p.sh

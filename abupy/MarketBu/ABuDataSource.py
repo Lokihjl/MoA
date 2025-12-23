@@ -166,32 +166,18 @@ def kline_pd(symbol, data_mode, n_folds=2, start=None, end=None, save=True):
                                                                                         end)
         save_kl_key = (temp_symbol, start_int, end_int)
         
-        # 如果是强制走网络，直接请求使用load_kline_df_net
-        if ABuEnv.g_data_fetch_mode == EMarketDataFetchMode.E_DATA_FETCH_FORCE_NET:
-            df = load_kline_df_net(source, temp_symbol, n_folds=n_folds, start=start, end=end, start_int=start_int,
-                                 end_int=end_int, save=save)
-            return df, save_kl_key
-
-        # 检测本地缓存数据是否满足需要，如果需要的数据在存储的数据之间，则可切片放回
-        match = False
-        if start_int >= df_start_int and end_int <= df_end_int:
-            match = True
-        elif start_int >= df_start_int and force_local:
-            match = True
-        elif start_int >= df_req_start and end_int <= df_req_end:
-            match = True
-
-        if match:
-            if data_mode == EMarketDataSplitMode.E_DATA_SPLIT_SE:
-                # 如果满足，且模式需要根据切割df的进行切割筛选
-                df = df[(start_int <= df.date) & (df.date <= end_int)]
-        elif not force_local:
-            # 数据不满足，但非强制本地，走网络
-            df = load_kline_df_net(source, temp_symbol, n_folds, start=start, end=end, start_int=start_int,
-                                   end_int=end_int, save=save)
-            if data_mode == EMarketDataSplitMode.E_DATA_SPLIT_UNDO:
-                # SPLIT_UNDO需要读取所有本地数据不切割返回
-                df, _, _ = load_kline_from_sqlite(temp_symbol.value)
+        # 禁用网络请求，只使用本地SQLite数据，确保所有数据从下载模块获取
+        # 直接返回本地数据，不进行网络请求
+        if df is not None and data_mode == EMarketDataSplitMode.E_DATA_SPLIT_SE:
+            # 如果满足，且模式需要根据切割df的进行切割筛选
+            df = df[(start_int <= df.date) & (df.date <= end_int)]
+        elif df is None:
+            # 本地没有数据，返回None，不进行网络请求
+            return None, save_kl_key
+        
+        # SPLIT_UNDO需要读取所有本地数据不切割返回
+        if data_mode == EMarketDataSplitMode.E_DATA_SPLIT_UNDO:
+            df, _, _ = load_kline_from_sqlite(temp_symbol.value)
         return df, save_kl_key
     except HDF5ExtError:
         # hdf5 bug
