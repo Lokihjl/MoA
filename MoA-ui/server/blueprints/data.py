@@ -4,7 +4,7 @@ import json
 import threading
 from datetime import datetime
 from . import moA_bp
-from ..models import DataDownloadRecord, KlineData, StockBasic, db
+from models import DataDownloadRecord, KlineData, StockBasic, db
 
 # 用于存储正在运行的下载线程
 # key: record_id, value: thread对象
@@ -1396,19 +1396,19 @@ def get_stock_basic_info():
             return jsonify({'error': '股票代码不能为空'}), 400
         
         # 从KlineData表中获取最新的价格数据
-        latest_kline = KlineData.query.filter_by(
-            symbol=symbol,
-            market=market
-        ).order_by(KlineData.date.desc()).first()
+        query = KlineData.query.filter_by(symbol=symbol)
+        if market:
+            query = query.filter_by(market=market)
+        latest_kline = query.order_by(KlineData.date.desc()).first()
         
         if not latest_kline:
             return jsonify({'error': '未找到该股票的数据'}), 404
         
         # 获取前一天的数据用于计算涨跌幅
-        previous_kline = KlineData.query.filter_by(
-            symbol=symbol,
-            market=market
-        ).filter(KlineData.date < latest_kline.date).order_by(KlineData.date.desc()).first()
+        query = KlineData.query.filter_by(symbol=symbol)
+        if market:
+            query = query.filter_by(market=market)
+        previous_kline = query.filter(KlineData.date < latest_kline.date).order_by(KlineData.date.desc()).first()
         
         # 计算涨跌幅
         change_percent = 0.0
@@ -1436,6 +1436,7 @@ def get_stock_basic_info():
             'currentPrice': float(latest_kline.close),
             'changePercent': round(change_percent, 2),
             'volume': float(latest_kline.volume),
+            'amount': float(latest_kline.amount) if latest_kline.amount else 0.0,
             'open': float(latest_kline.open),
             'high': float(latest_kline.high),
             'low': float(latest_kline.low),
@@ -1481,5 +1482,150 @@ def get_supported_data_types():
     except Exception as e:
         print('获取支持的数据类型失败:', str(e))
         return jsonify({'error': f'获取支持的数据类型失败: {str(e)}'}), 500
+
+# 原理查询接口
+@moA_bp.route('/data/theory/query', methods=['GET'])
+def query_theory():
+    try:
+        # 获取查询参数
+        symbol = request.args.get('symbol', None)
+        query = request.args.get('query', None)
+        start_date = request.args.get('start_date', None)
+        end_date = request.args.get('end_date', None)
+        
+        if not symbol or not query:
+            return jsonify({'error': '股票代码和查询条件不能为空'}), 400
+        
+        # 获取股票K线数据
+        from datetime import datetime
+        if start_date:
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+        else:
+            start_date_obj = None
+            
+        if end_date:
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+        else:
+            end_date_obj = None
+            
+        # 构建查询
+        kline_query = KlineData.query.filter_by(
+            symbol=symbol,
+            market='cn',
+            data_type='day'
+        )
+        
+        if start_date_obj:
+            kline_query = kline_query.filter(KlineData.date >= start_date_obj)
+            
+        if end_date_obj:
+            kline_query = kline_query.filter(KlineData.date <= end_date_obj)
+            
+        kline_records = kline_query.order_by(KlineData.date.desc()).all()
+        
+        # 简单处理查询条件，这里可以根据实际需求扩展
+        query_lower = query.lower()
+        result = f"原理查询结果：\n"
+        result += f"股票代码：{symbol}\n"
+        result += f"查询条件：{query}\n"
+        result += f"查询时间范围：{start_date} 至 {end_date}\n"
+        result += f"数据条数：{len(kline_records)}\n\n"
+        
+        # 根据查询条件返回不同的结果
+        if '均线' in query_lower or 'ma' in query_lower:
+            if len(kline_records) >= 20:
+                # 计算5日均线、10日均线、20日均线
+                close_prices = [record.close for record in kline_records[:20]]
+                ma5 = sum(close_prices[:5]) / 5 if len(close_prices) >= 5 else 0
+                ma10 = sum(close_prices[:10]) / 10 if len(close_prices) >= 10 else 0
+                ma20 = sum(close_prices) / 20
+                
+                result += "均线分析：\n"
+                result += f"5日均线：{ma5:.2f}\n"
+                result += f"10日均线：{ma10:.2f}\n"
+                result += f"20日均线：{ma20:.2f}\n\n"
+                
+                # 简单的均线策略分析
+                if close_prices[0] > ma5 > ma10 > ma20:
+                    result += "短期均线呈多头排列，市场看涨。\n"
+                elif close_prices[0] < ma5 < ma10 < ma20:
+                    result += "短期均线呈空头排列，市场看跌。\n"
+                else:
+                    result += "均线无明显趋势，市场震荡。\n"
+            else:
+                result += "数据不足，无法进行均线分析。\n"
+        elif '成交量' in query_lower or 'volume' in query_lower:
+            if len(kline_records) >= 10:
+                # 计算平均成交量
+                volumes = [record.volume for record in kline_records[:10]]
+                avg_volume = sum(volumes) / 10
+                
+                result += "成交量分析：\n"
+                result += f"最新成交量：{volumes[0]:.2f}\n"
+                result += f"10日平均成交量：{avg_volume:.2f}\n\n"
+                
+                # 简单的成交量分析
+                if volumes[0] > avg_volume * 1.5:
+                    result += "成交量明显放大，市场活跃度增加。\n"
+                elif volumes[0] < avg_volume * 0.5:
+                    result += "成交量明显萎缩，市场活跃度降低。\n"
+                else:
+                    result += "成交量正常，市场活跃度稳定。\n"
+            else:
+                result += "数据不足，无法进行成交量分析。\n"
+        elif '涨跌' in query_lower or 'change' in query_lower:
+            if len(kline_records) >= 2:
+                # 计算涨跌幅
+                current_close = kline_records[0].close
+                previous_close = kline_records[1].close
+                change = current_close - previous_close
+                change_percent = (change / previous_close) * 100
+                
+                result += "涨跌分析：\n"
+                result += f"当前收盘价：{current_close:.2f}\n"
+                result += f"前收盘价：{previous_close:.2f}\n"
+                result += f"涨跌额：{change:.2f}\n"
+                result += f"涨跌幅：{change_percent:.2f}%\n\n"
+                
+                # 简单的涨跌分析
+                if change_percent > 5:
+                    result += "大幅上涨，市场情绪乐观。\n"
+                elif change_percent > 0:
+                    result += "小幅上涨，市场情绪平稳。\n"
+                elif change_percent < -5:
+                    result += "大幅下跌，市场情绪悲观。\n"
+                elif change_percent < 0:
+                    result += "小幅下跌，市场情绪平稳。\n"
+                else:
+                    result += "平盘，市场情绪稳定。\n"
+        else:
+            # 默认分析
+            if len(kline_records) >= 1:
+                latest_record = kline_records[0]
+                result += "股票基本分析：\n"
+                result += f"最新日期：{latest_record.date}\n"
+                result += f"开盘价：{latest_record.open:.2f}\n"
+                result += f"最高价：{latest_record.high:.2f}\n"
+                result += f"最低价：{latest_record.low:.2f}\n"
+                result += f"收盘价：{latest_record.close:.2f}\n"
+                result += f"成交量：{latest_record.volume:.2f}\n"
+                result += f"成交额：{latest_record.amount:.2f}\n\n"
+                
+                # 简单的价格分析
+                if latest_record.close > latest_record.open:
+                    result += "当日收阳线，买方力量较强。\n"
+                elif latest_record.close < latest_record.open:
+                    result += "当日收阴线，卖方力量较强。\n"
+                else:
+                    result += "当日收十字星，买卖双方力量均衡。\n"
+            else:
+                result += "数据不足，无法进行分析。\n"
+        
+        return jsonify(result), 200
+    except Exception as e:
+        print('原理查询失败:', str(e))
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'原理查询失败: {str(e)}'}), 500
 
 

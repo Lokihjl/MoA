@@ -69,12 +69,8 @@ class AbuBenchmark(PickleStateMixin):
     class AbuBenchmark(object):
         def __init__(self, benchmark=None, start=None, end=None, n_folds=2):
             if benchmark is None:
-                if ABuEnv.g_market_target == EMarketTargetType.E_MARKET_TARGET_US:
-                    benchmark = IndexSymbol.IXIC
-                elif ABuEnv.g_market_target == EMarketTargetType.E_MARKET_TARGET_HK:
-                    benchmark = IndexSymbol.HSI
-                else:
-                    benchmark = IndexSymbol.SH
+                # 只支持A股，默认使用上证指数
+                benchmark = IndexSymbol.SH
             self.benchmark = benchmark
 
             self.n_folds = n_folds

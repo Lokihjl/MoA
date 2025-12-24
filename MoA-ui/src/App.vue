@@ -85,7 +85,7 @@ onMounted(() => {
             </li>
             <li class="menu-item fade-in-up" :style="{ animationDelay: '0.2s' }">
               <router-link to="/resistance-support" active-class="active">
-                <span class="menu-icon">�</span>
+                <span class="menu-icon">📏</span>
                 <span class="menu-text">阻力位支撑位</span>
               </router-link>
             </li>
@@ -132,18 +132,12 @@ onMounted(() => {
               </router-link>
             </li>
             <li class="menu-item fade-in-up" :style="{ animationDelay: '0.6s' }">
-              <router-link to="/stock-info" active-class="active">
-                <span class="menu-icon">�</span>
-                <span class="menu-text">股票信息查询</span>
-              </router-link>
-            </li>
-            <li class="menu-item fade-in-up" :style="{ animationDelay: '0.65s' }">
               <router-link to="/data-download" active-class="active">
                 <span class="menu-icon">⬇️</span>
                 <span class="menu-text">数据下载</span>
               </router-link>
             </li>
-            <li class="menu-item fade-in-up" :style="{ animationDelay: '0.7s' }">
+            <li class="menu-item fade-in-up" :style="{ animationDelay: '0.65s' }">
               <router-link to="/finance-api-test" active-class="active">
                 <span class="menu-icon">�</span>
                 <span class="menu-text">金融API测试</span>

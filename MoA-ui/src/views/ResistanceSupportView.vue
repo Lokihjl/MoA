@@ -133,16 +133,34 @@
             <table>
               <thead>
                 <tr>
-                  <th>日期</th>
-                  <th>开盘价</th>
-                  <th>最高价</th>
-                  <th>最低价</th>
-                  <th>收盘价</th>
-                  <th>成交量</th>
+                  <th @click="sortData('date')">
+                    日期 
+                    <span class="sort-arrow" :class="{ 'active': sortField === 'date' }">{{ sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}</span>
+                  </th>
+                  <th @click="sortData('open')">
+                    开盘价 
+                    <span class="sort-arrow" :class="{ 'active': sortField === 'open' }">{{ sortField === 'open' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}</span>
+                  </th>
+                  <th @click="sortData('high')">
+                    最高价 
+                    <span class="sort-arrow" :class="{ 'active': sortField === 'high' }">{{ sortField === 'high' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}</span>
+                  </th>
+                  <th @click="sortData('low')">
+                    最低价 
+                    <span class="sort-arrow" :class="{ 'active': sortField === 'low' }">{{ sortField === 'low' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}</span>
+                  </th>
+                  <th @click="sortData('close')">
+                    收盘价 
+                    <span class="sort-arrow" :class="{ 'active': sortField === 'close' }">{{ sortField === 'close' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}</span>
+                  </th>
+                  <th @click="sortData('volume')">
+                    成交量 
+                    <span class="sort-arrow" :class="{ 'active': sortField === 'volume' }">{{ sortField === 'volume' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(item, index) in klineData" :key="index">
+                <tr v-for="(item, index) in sortedKlineData" :key="index">
                   <td>{{ formatDate(item.date) }}</td>
                   <td>{{ item.open.toFixed(2) }}</td>
                   <td>{{ item.high.toFixed(2) }}</td>
@@ -167,8 +185,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
-import axios from 'axios'
 import * as echarts from 'echarts'
+import { apiService } from '../services/api'
 
 // 查询参数
 const queryParams = ref({
@@ -184,6 +202,33 @@ const symbolsList = ref<any[]>([])
 // K线数据
 const klineData = ref<any[]>([])
 
+// 排序相关
+const sortField = ref('date')
+const sortOrder = ref('desc') // 默认按时间倒序
+
+// 排序后的数据
+const sortedKlineData = computed(() => {
+  if (!klineData.value.length) return []
+  
+  return [...klineData.value].sort((a, b) => {
+    let aVal, bVal
+    
+    if (sortField.value === 'date') {
+      aVal = new Date(a.date).getTime()
+      bVal = new Date(b.date).getTime()
+    } else {
+      aVal = a[sortField.value]
+      bVal = b[sortField.value]
+    }
+    
+    if (sortOrder.value === 'asc') {
+      return aVal - bVal
+    } else {
+      return bVal - aVal
+    }
+  })
+})
+
 // 阻力位和支撑位
 const resistanceLevels = ref<number[]>([])
 const supportLevels = ref<number[]>([])
@@ -192,19 +237,7 @@ const supportLevels = ref<number[]>([])
 const symbolSearchText = ref('')
 
 // 股票名称映射表
-const stockNameMap = ref<Record<string, string>>({
-  'sh600000': '浦发银行',
-  'sh600036': '招商银行',
-  'sh600519': '贵州茅台',
-  'sh601398': '工商银行',
-  'sh601857': '中国石油',
-  'sh601118': '海南橡胶',
-  'sz000001': '平安银行',
-  'sz000002': '万科A',
-  'sz000858': '五粮液',
-  'sz002415': '海康威视',
-  'sz300750': '宁德时代'
-})
+const stockNameMap = ref<Record<string, string>>({})
 
 // 过滤后的股票列表
 const filteredSymbols = computed(() => {
@@ -307,8 +340,13 @@ const initDateRange = () => {
 // 获取已下载的股票列表
 const fetchSymbolsList = async () => {
   try {
-    const response = await axios.get('/api/moA/data/download/symbols')
-    symbolsList.value = response.data
+    const response = await apiService.get<any[]>('/data/download/symbols')
+    symbolsList.value = response
+    
+    // 构建股票名称映射表
+    response.forEach(item => {
+      stockNameMap.value[item.symbol] = item.name || item.symbol
+    })
   } catch (error) {
     console.error('获取已下载股票列表失败:', error)
     // 如果获取失败，使用默认股票列表
@@ -319,6 +357,11 @@ const fetchSymbolsList = async () => {
       { symbol: 'sz000001', market: 'cn' },
       { symbol: 'sz000858', market: 'cn' }
     ]
+    
+    // 为默认列表构建股票名称映射表
+    symbolsList.value.forEach(item => {
+      stockNameMap.value[item.symbol] = item.symbol
+    })
   }
 }
 
@@ -336,6 +379,18 @@ const clearQuery = () => {
   initDateRange()
 }
 
+// 排序数据
+const sortData = (field: string) => {
+  if (sortField.value === field) {
+    // 如果点击相同字段，切换排序方向
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    // 如果点击不同字段，默认升序
+    sortField.value = field
+    sortOrder.value = 'asc'
+  }
+}
+
 // 分析阻力位和支撑位
 const analyzeResistanceSupport = async () => {
   if (!queryParams.value.symbol) {
@@ -347,19 +402,17 @@ const analyzeResistanceSupport = async () => {
   
   try {
     // 调用阻力位支撑位API获取数据
-    const response = await axios.get('/api/moA/data/resistance-support', {
-      params: {
-        symbol: queryParams.value.symbol,
-        market: queryParams.value.market,
-        data_type: 'day',
-        start_date: queryParams.value.start_date,
-        end_date: queryParams.value.end_date
-      }
+    const response = await apiService.get<any>('/data/resistance-support', {
+      symbol: queryParams.value.symbol,
+      market: queryParams.value.market,
+      data_type: 'day',
+      start_date: queryParams.value.start_date,
+      end_date: queryParams.value.end_date
     })
     
-    klineData.value = response.data.kline_data
-    resistanceLevels.value = response.data.resistance_levels
-    supportLevels.value = response.data.support_levels
+    klineData.value = response.kline_data
+    resistanceLevels.value = response.resistance_levels
+    supportLevels.value = response.support_levels
     
     // 绘制K线图
     initKlineChart()
@@ -805,6 +858,29 @@ th {
   font-weight: 600;
   color: #333;
   text-align: right;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+th:hover {
+  background-color: #e9ecef;
+}
+
+.sort-arrow {
+  margin-left: 0.25rem;
+  color: #666;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+th:hover .sort-arrow {
+  opacity: 0.5;
+}
+
+.sort-arrow.active {
+  opacity: 1;
+  color: #3498db;
 }
 
 td {
@@ -814,6 +890,11 @@ td {
 /* 日期列左对齐 */
 th:first-child, td:first-child {
   text-align: left;
+}
+
+/* 排序箭头左对齐 */
+th:first-child .sort-arrow {
+  margin-left: 0.5rem;
 }
 
 tr:hover {

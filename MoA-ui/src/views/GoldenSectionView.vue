@@ -50,7 +50,7 @@
                       :class="{ 'selected': singleParams.symbol === item.symbol }"
                       @click="selectSymbol(item.symbol)"
                     >
-                      {{ item.symbol }} ({{ stockNameMap[item.symbol] || item.market }})
+                      {{ item.symbol }} ({{ item.name || item.market }})
                     </div>
                   </div>
                 </div>
@@ -715,7 +715,7 @@ const filteredSymbols = computed(() => {
       return true;
     }
     
-    const stockName = stockNameMap.value[item.symbol]?.toLowerCase() || '';
+    const stockName = item.name?.toLowerCase() || '';
     if (stockName.includes(searchText)) {
       return true;
     }

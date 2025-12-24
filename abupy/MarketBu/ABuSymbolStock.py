@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-    股票类型的symbol模块，a股，美股，港股
+    股票类型的symbol模块，仅保留a股
 """
 from __future__ import print_function
 from __future__ import absolute_import
@@ -44,10 +44,6 @@ __weixin__ = 'abu_quant'
 _rom_dir = ABuEnv.g_project_rom_data_dir
 """a股symbol，文件定期重新爬取，更新"""
 _stock_code_cn = os.path.join(_rom_dir, 'stock_code_CN.csv')
-"""美股symbol，文件定期重新爬取，更新"""
-_stock_code_us = os.path.join(_rom_dir, 'stock_code_US.csv')
-"""港股symbol，文件定期重新爬取，更新"""
-_stock_code_hk = os.path.join(_rom_dir, 'stock_code_HK.csv')
 
 
 class AbuStockBaseWrap(object):
@@ -248,161 +244,21 @@ class AbuSymbolCN(AbuSymbolStockBase):
         return default
 
 
-@singleton
-@AbuStockBaseWrap()
-class AbuSymbolUS(AbuSymbolStockBase):
-    """美股symbol类，singleton"""
 
-    """针对历史不适合做回测，对回测结果有误导影响的symbol, 即可能会产生几千倍，几百倍收益的不要参加回测"""
-    s_unusual_symbol = ['usACV', 'usAMPH', 'usCBX', 'usDCIX', 'usDM', 'usEPE', 'usFPL', 'usFUEL', 'usGDI', 'usHCC',
-                        'usKBSF', 'usKEG', 'usKMI', 'usLMCA', 'usLTM', 'usLUX', 'usMBRX', 'usMPG', 'usOPXAW', 'usORN',
-                        'usPJT', 'usPTIE', 'usSAB', 'usSPR', 'usSR', 'usTGEN', 'usTNXP', 'usVBIV', 'usWMGIZ',
-                        'usXGTIW', 'usMBRX']
-
-    def __init__(self):
-        """被AbuStockBaseWrap替换__init__，即只需读取美股数据到self.df 后续在类装饰器完成"""
-        self.df = pd.read_csv(_stock_code_us, index_col=0, dtype=str)
-
-    def __contains__(self, item):
-        """成员测试：是否item或item[2:]在self.df.symbol.values中"""
-        return item in self.df.symbol.values or (len(item) > 2 and item[2:] in self.df.symbol.values)
-
-    def __getitem__(self, key):
-        """
-            索引获取：两种模式索引获取：
-            1. 参数key为df的columns名称，返回self.df[key]，即get df的列
-            2. 参数key为股票代码名称，标准化后查询，self.df[self.df.symbol == key]，即get df的行
-        """
-
-        if key in self.df.columns:
-            # 参数key为df的columns名称，返回self.df[key]，即get df的列
-            return self.df[key]
-
-        # get df的行, 即对于股票的详细信息
-        if key in self.df.symbol.values:
-            return self.df[self.df.symbol == key]
-        if len(key) > 2 and key[2:] in self.df.symbol.values:
-            return self.df[self.df.symbol == key[2:]]
-
-    def symbol_func(self, df):
-        """
-        通过df组装支持ABuSymbolPd.make_kl_df使用的symbol，使用('us' + df['symbol']).tolist()
-        :param df: pd.DataFrame对象
-        :return: 支持ABuSymbolPd.make_kl_df使用的symbol序列
-        """
-        # noinspection PyUnresolvedReferences
-        return (EMarketTargetType.E_MARKET_TARGET_US.value + df['symbol']).tolist()
-
-    def all_symbol(self, index=False):
-        """
-        获取美股市场中所有股票symbol str对象序列，即美股全市场symbol序列
-        :param index: 是否需要返回美股大盘symbol
-        :return: 美股全市场symbol序列
-        """
-
-        # 过滤AMEX等大盘，etf类型, 只取NASDAQ和NYSE
-        df_filter = self.df[(self.df['exchange'] == EMarketSubType.US_OQ.value) |
-                            (self.df['exchange'] == EMarketSubType.US_N.value)]
-        # 通过symbol_func转换为外部可直接使用ABuSymbolPd.make_kl_df请求的symbol序列
-        all_symbol = self.symbol_func(df_filter)
-        all_symbol = list(set(all_symbol) - set(AbuSymbolUS.s_unusual_symbol))
-        if index:
-            # 需要返回大盘symbol
-            all_symbol.extend(['{}{}'.format(EMarketTargetType.E_MARKET_TARGET_US.value, symbol)
-                               for symbol in Symbol.US_INDEX])
-        return all_symbol
-
-    def query_symbol_sub_market(self, code, default=EMarketSubType.US_N.value):
-        """
-        查询股票所在的子市场，即交易所信息, 美股市场默认返回纽交所
-        :return: 返回EMarketSubType.value值，即子市场（交易所）字符串对象
-        """
-
-        if code in self:
-            return self[code].exchange.values[0].upper()
-        return default
-
-
-@singleton
-@AbuStockBaseWrap()
-class AbuSymbolHK(AbuSymbolStockBase):
-    """港股symbol类，singleton"""
-
-    def __init__(self):
-        """被AbuStockBaseWrap替换__init__，即只需读取港股数据到self.df 后续在类装饰器完成"""
-        self.df = pd.read_csv(_stock_code_hk, index_col=0, dtype=str)
-
-    def __contains__(self, item):
-        """成员测试：是否item在self.df.symbol.values中"""
-        return digit_str(item) in self.df.symbol.values
-
-    def __getitem__(self, key):
-        """
-            索引获取：两种模式索引获取：
-            1. 参数key为df的columns名称，返回self.df[key]，即get df的列
-            2. 参数key为股票代码名称，标准化后查询，self.df[self.df.symbol == key]，即get df的行
-        """
-
-        # 参数key为df的columns名称，返回self.df[key]
-        if key in self.df.columns:
-            return self.df[key]
-
-        # 参数key为股票代码名称，标准化后查询
-        ds = digit_str(key)
-        if ds in self.df.symbol.values:
-            return self.df[self.df.symbol == ds]
-
-    def symbol_func(self, df):
-        """
-        通过df组装支持ABuSymbolPd.make_kl_df使用的symbol，使用('hk' + df['symbol']).tolist()
-        :param df: pd.DataFrame对象
-        :return: 支持ABuSymbolPd.make_kl_df使用的symbol序列
-        """
-        # noinspection PyUnresolvedReferences
-        return (EMarketTargetType.E_MARKET_TARGET_HK.value + df['symbol']).tolist()
-
-    def all_symbol(self, index=False):
-        """
-         获取港股市场中所有股票symbol str对象序列，即港股全市场symbol序列
-         :param index: 是否需要返回港股大盘symbol
-         :return: 港股全市场symbol序列
-         """
-
-        # 通过symbol_func转换为外部可直接使用ABuSymbolPd.make_kl_df请求的symbol序列
-        all_symbol = self.symbol_func(self.df)
-        if index:
-            # 需要返回大盘symbol
-            all_symbol.extend(['{}{}'.format(EMarketTargetType.E_MARKET_TARGET_HK.value, symbol)
-                               for symbol in Symbol.HK_INDEX])
-        return all_symbol
-
-    # noinspection PyUnusedLocal
-    def query_symbol_sub_market(self, code, default=EMarketSubType.HK.value):
-        """
-        查询股票所在的子市场，即交易所信息, 港股市场默认返回hk
-        :return: 返回EMarketSubType.value值，即子市场（交易所）字符串对象
-        """
-        return default
 
 
 def query_stock_info(symbol):
     """
     通过将symbol code转换为Symbol对象查询对应的市场，构造对应的市场对象，
-    仅支持股票类型symbol
-    :param symbol: eg：usTSLA
+    仅支持A股股票类型symbol
+    :param symbol: eg：sz000001
     :return: 一行数据的pd.DataFrame对象
     """
+    # 只处理A股symbol
+    sn = AbuSymbolCN()
     if isinstance(symbol, six.string_types):
-        symbol = code_to_symbol(symbol)
-
-    if symbol.is_a_stock():
-        sn = AbuSymbolCN()
-    elif symbol.is_hk_stock():
-        sn = AbuSymbolHK()
-    elif symbol.is_us_stock():
-        sn = AbuSymbolUS()
+        # 如果是字符串直接查询
+        return sn[symbol]
     else:
-        print('query_symbol_info just suit sz, sh, us, hk!')
-        return
-    # 直接使用类的__getitem__方法
-    return sn[symbol.symbol_code]
+        # 如果是Symbol对象，使用symbol_code查询
+        return sn[symbol.symbol_code]

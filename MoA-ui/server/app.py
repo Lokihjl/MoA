@@ -17,10 +17,10 @@ ABuEnv.g_data_fetch_mode = EMarketDataFetchMode.E_DATA_FETCH_NORMAL
 ABuEnv.g_data_cache_type = ABuEnv.EDataCacheType.E_DATA_CACHE_SQLITE
 
 from flask import Flask, jsonify
-from .config.config import DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS, DEBUG, PORT
-from .models import db
-from .blueprints import moA_bp
-from .utils.swagger import create_swagger_blueprint, get_swagger_json, API_URL
+from config.config import DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS, DEBUG, PORT
+from models import db
+from blueprints import moA_bp
+from utils.swagger import create_swagger_blueprint, get_swagger_json, API_URL
 
 # 创建Flask应用
 app = Flask(__name__)

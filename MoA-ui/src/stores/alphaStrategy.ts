@@ -30,6 +30,7 @@ interface AlphaStrategyParams {
   nFolds: number
   startDate: string
   endDate: string
+  symbol: string
 }
 
 // 定义Alpha策略Store
@@ -39,9 +40,11 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
     params: {
       initialCash: 1000000,
       nFolds: 2,
-      startDate: '2020-01-01',
-      endDate: '2023-12-31'
+      startDate: '',
+      endDate: '',
+      symbol: 'sz000001'
     } as AlphaStrategyParams,
+
     
     // 选股因子
     stockFactors: [
@@ -114,11 +117,18 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
     
     // 重置参数
     resetParams() {
+      // 设置默认的开始和结束日期
+      const endDate = new Date().toISOString().split('T')[0]
+      const startDate = new Date()
+      startDate.setFullYear(startDate.getFullYear() - 2)
+      const startDateStr = startDate.toISOString().split('T')[0]
+      
       this.params = {
         initialCash: 1000000,
         nFolds: 2,
-        startDate: '2020-01-01',
-        endDate: '2023-12-31'
+        startDate: startDateStr,
+        endDate: endDate,
+        symbol: 'sz000001'
       }
       
       this.stockFactors = [
@@ -138,6 +148,8 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
       this.chartData = null
     },
     
+
+    
     // 执行策略
     async runStrategy() {
       this.isRunning = true
@@ -154,7 +166,8 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
           startDate: this.params.startDate,
           endDate: this.params.endDate,
           capital: this.params.initialCash,
-          nFolds: this.params.nFolds
+          nFolds: this.params.nFolds,
+          symbol: this.params.symbol
         }
         
         // 调用后端API执行策略
@@ -179,9 +192,11 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
           this.error = result.message || '策略执行失败'
         }
       } catch (err: any) {
-        // 如果API调用失败，使用模拟数据
-        console.error('策略执行失败，使用模拟数据:', err)
+        // 如果API调用失败，显示错误信息
+        console.error('策略执行失败:', err)
         this.error = err.message || '策略执行失败'
+        this.result = null
+        this.chartData = null
       } finally {
         this.isRunning = false
       }

@@ -127,7 +127,10 @@ class AbuMetricsBase(object):
             # 倒数得到满仓乘数
             self.stocks_full_rate_factor = (1 / stocks_full_rate)
 
-        # 收益数据
+        # 收益数据 - 按时间倒序排列
+        self.benchmark.kl_pd = self.benchmark.kl_pd.sort_index(ascending=False)
+        self.capital.capital_pd = self.capital.capital_pd.sort_index(ascending=False)
+        
         self.benchmark_returns = np.round(self.benchmark.kl_pd.close.pct_change(), 3)
         # 如果enable_stocks_full_rate_factor 则 * self.stocks_full_rate_factor的意义为随时都是满仓
         self.algorithm_returns = np.round(self.capital.capital_pd['capital_blance'].pct_change(),
@@ -180,6 +183,9 @@ class AbuMetricsBase(object):
     def _metrics_sell_stats(self):
         """并非度量真实成交了的结果，只度量orders_pd，即认为没有仓位管理和资金量限制前提下的表现"""
 
+        # 按时间倒序排列订单数据
+        self.orders_pd = self.orders_pd.sort_values(by=['buy_date', 'sell_date'], ascending=False)
+        
         # 根据order中的数据，计算盈利比例
         self.orders_pd['profit_cg'] = self.orders_pd['profit'] / (
             self.orders_pd['buy_price'] * self.orders_pd['buy_cnt'])
@@ -258,6 +264,9 @@ class AbuMetricsBase(object):
         """度量真实成交了的action_pd 计算买入资金的分布平均性，及是否有良好的分布"""
 
         action_pd = self.action_pd
+        # 按时间倒序排列交易行为数据
+        action_pd = action_pd.sort_values(by=['Date'], ascending=False)
+        
         # 只选生效的, 由于忽略非交易日, 大概有多出0.6的误差
         self.act_buy = action_pd[action_pd.action.isin(['buy']) & action_pd.deal.isin([True])]
         # drop重复的日期上的行为，只保留一个，cp_date形如下所示
@@ -328,8 +337,31 @@ class AbuMetricsBase(object):
         plt.show()
 
     @valid_check
-    def plot_returns_cmp(self, only_show_returns=False, only_info=False):
-        """考虑资金情况下的度量，进行与benchmark的收益度量对比，收益趋势，资金变动可视化，以及其它度量信息"""
+    def get_paginated_data(self, data, page=1, page_size=30, reverse=True):
+        """
+        分页获取数据
+        :param data: 要分页的数据，可以是pd.DataFrame或pd.Series
+        :param page: 当前页码，默认第1页
+        :param page_size: 每页数据量，默认30条
+        :param reverse: 是否按时间倒序排列，默认True
+        :return: 分页后的数据
+        """
+        # 如果需要倒序排列，则先排序
+        if reverse and hasattr(data, 'index') and isinstance(data.index, pd.DatetimeIndex):
+            data = data.sort_index(ascending=False)
+        
+        start = (page - 1) * page_size
+        end = start + page_size
+        return data.iloc[start:end]
+    
+    def plot_returns_cmp(self, only_show_returns=False, only_info=False, page=1, page_size=30):
+        """考虑资金情况下的度量，进行与benchmark的收益度量对比，收益趋势，资金变动可视化，以及其它度量信息
+        
+        :param only_show_returns: 是否只显示收益对比
+        :param only_info: 是否只显示文字信息
+        :param page: 当前页码，默认第1页
+        :param page_size: 每页数据量，默认30条
+        """
 
         self.log_func('买入后卖出的交易数量:{}'.format(self.order_has_ret.shape[0]))
         self.log_func('买入后尚未卖出的交易数量:{}'.format(self.order_keep.shape[0]))
@@ -352,10 +384,15 @@ class AbuMetricsBase(object):
 
         if only_info:
             return
+        
+        # 分页获取数据
+        benchmark_cum_returns_paginated = self.get_paginated_data(self.benchmark_cum_returns, page, page_size)
+        algorithm_cum_returns_paginated = self.get_paginated_data(self.algorithm_cum_returns, page, page_size)
 
-        self.benchmark_cum_returns.plot()
-        self.algorithm_cum_returns.plot()
+        benchmark_cum_returns_paginated.plot()
+        algorithm_cum_returns_paginated.plot()
         plt.legend(['benchmark returns', 'algorithm returns'], loc='best')
+        plt.title('Returns Comparison (Page {} of {})'.format(page, (len(self.benchmark_cum_returns) + page_size - 1) // page_size))
         plt.show()
 
         if only_show_returns:

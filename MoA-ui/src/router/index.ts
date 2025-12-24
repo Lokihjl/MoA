@@ -53,11 +53,7 @@ const router = createRouter({
       name: 'change-analysis',
       component: () => import('../views/ChangeAnalysisView.vue')
     },
-    {
-      path: '/stock-info',
-      name: 'stock-info',
-      component: () => import('../views/StockInfoView.vue')
-    },
+
     {
       path: '/data-download',
       name: 'data-download',

@@ -26,7 +26,7 @@
       <h3>快速开始</h3>
       <ul>
         <li><router-link to="/loopback">运行历史回测</router-link></li>
-        <li><router-link to="/stock-info">查询股票信息</router-link></li>
+
         <li><router-link to="/resistance-support">分析阻力位支撑位</router-link></li>
       </ul>
     </div>

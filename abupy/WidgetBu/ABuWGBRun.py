@@ -77,13 +77,17 @@ class WidgetRunLoopBack(WidgetBase):
         if metrics is None:
             return
 
+        # 支持分页功能的参数
+        page_size = self.tt.out_put_display_max_rows.value if hasattr(self.tt, 'out_put_display_max_rows') else 30
+        current_page = 1
+
         if self.tt.metrics_mode.value == 0:
-            metrics.plot_returns_cmp(only_show_returns=True)
+            metrics.plot_returns_cmp(only_show_returns=True, page=current_page, page_size=page_size)
         else:
             metrics.plot_order_returns_cmp(only_info=True)
 
-        pd.options.display.max_rows = self.tt.out_put_display_max_rows.value
-        pd.options.display.max_columns = self.tt.out_put_display_max_columns.value
+        pd.options.display.max_rows = page_size
+        pd.options.display.max_columns = self.tt.out_put_display_max_columns.value if hasattr(self.tt, 'out_put_display_max_columns') else 20
 
         """
             options={u'只输出交易单：orders_pd': 0,
@@ -92,14 +96,29 @@ class WidgetRunLoopBack(WidgetBase):
                      u'同时输出交易单，行为单，资金单':3
         """
         if self.tt.metrics_out_put.value == 0 or self.tt.metrics_out_put.value == 3:
-            show_msg_func(u'交易买卖详情单：')
-            display(abu_result_tuple.orders_pd)
+            show_msg_func(u'交易买卖详情单（按时间倒序）：')
+            # 分页显示交易单
+            paginated_orders = metrics.get_paginated_data(abu_result_tuple.orders_pd, current_page, page_size)
+            display(paginated_orders)
+            show_msg_func(u'共{}条记录，当前显示第{}页，每页{}条'.format(
+                len(abu_result_tuple.orders_pd), current_page, page_size))
+        
         if self.tt.metrics_out_put.value == 1 or self.tt.metrics_out_put.value == 3:
-            show_msg_func(u'交易行为详情单：')
-            display(abu_result_tuple.action_pd)
+            show_msg_func(u'交易行为详情单（按时间倒序）：')
+            # 分页显示行为单
+            paginated_actions = metrics.get_paginated_data(abu_result_tuple.action_pd, current_page, page_size)
+            display(paginated_actions)
+            show_msg_func(u'共{}条记录，当前显示第{}页，每页{}条'.format(
+                len(abu_result_tuple.action_pd), current_page, page_size))
+        
         if self.tt.metrics_out_put.value == 2 or self.tt.metrics_out_put.value == 3:
-            show_msg_func(u'交易资金详细单：')
-            display(abu_result_tuple.capital.capital_pd)
+            show_msg_func(u'交易资金详细单（按时间倒序）：')
+            # 分页显示资金单
+            paginated_capital = metrics.get_paginated_data(abu_result_tuple.capital.capital_pd, current_page, page_size)
+            display(paginated_capital)
+            show_msg_func(u'共{}条记录，当前显示第{}页，每页{}条'.format(
+                len(abu_result_tuple.capital.capital_pd), current_page, page_size))
+            
             show_msg_func(u'交易手续费详单：')
             display(abu_result_tuple.capital.commission.commission_df)
 

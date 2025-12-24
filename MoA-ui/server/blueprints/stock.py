@@ -453,3 +453,62 @@ def get_stock_data_from_api(api_type, symbol):
     :param symbol: 股票代码
     """
     return get_finance_api_data(api_type, symbol)
+
+
+@moA_bp.route('/stock/<symbol>/factors', methods=['GET'])
+def get_stock_factors(symbol):
+    """
+    获取股票财务因子数据的路由
+    """
+    try:
+        # 获取查询参数
+        factor_type = request.args.get('factorType', 'fundamental')
+        selected_factors = request.args.get('selectedFactors', 'pe,pb,roe')
+        limit = int(request.args.get('limit', 31))
+        
+        # 解析选择的因子列表
+        factor_list = [f.strip() for f in selected_factors.split(',')]
+        
+        # 生成模拟因子数据
+        import datetime
+        today = datetime.date.today()
+        factors = []
+        
+        for i in range(limit):
+            date = today - datetime.timedelta(days=limit-1-i)
+            factor_data = {
+                'date': date.strftime('%Y-%m-%d')
+            }
+            
+            # 为每个因子生成模拟数据
+            for factor in factor_list:
+                if factor == 'pe':
+                    factor_data['pe'] = round(10 + 20 * (0.5 + 0.5 * (i/limit)), 2)
+                elif factor == 'pb':
+                    factor_data['pb'] = round(1 + 5 * (0.5 + 0.5 * (i/limit)), 2)
+                elif factor == 'roe':
+                    factor_data['roe'] = round(0.05 + 0.2 * (0.5 + 0.5 * (i/limit)), 4)
+                elif factor == 'roa':
+                    factor_data['roa'] = round(0.02 + 0.1 * (0.5 + 0.5 * (i/limit)), 4)
+                elif factor == 'revenue_growth':
+                    factor_data['revenue_growth'] = round(-0.1 + 0.5 * (0.5 + 0.5 * (i/limit)), 4)
+                elif factor == 'profit_growth':
+                    factor_data['profit_growth'] = round(-0.2 + 0.6 * (0.5 + 0.5 * (i/limit)), 4)
+                elif factor == 'sentiment':
+                    factor_data['sentiment'] = round(-1 + 2 * (0.5 + 0.5 * (i/limit)), 2)
+                elif factor == 'social_heat':
+                    factor_data['social_heat'] = round(100 + 900 * (0.5 + 0.5 * (i/limit)), 0)
+                else:
+                    factor_data[factor] = round(100 * (0.5 + 0.5 * (i/limit)), 2)
+            
+            factors.append(factor_data)
+        
+        # 返回模拟数据
+        return jsonify({
+            'symbol': symbol,
+            'factorType': factor_type,
+            'selectedFactors': factor_list,
+            'factors': factors
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'获取因子数据失败: {str(e)}'}), 400

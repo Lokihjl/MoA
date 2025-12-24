@@ -868,7 +868,7 @@ const performOrthogonalization = () => {
       correlationReduction: 0.75 + Math.random() * 0.2,
       loadings: Array.from({ length: componentsCount }, () => 
         Array.from({ length: orthogonalParams.selectedFactors.length }, () => 
-          (Math.random() * 2 - 1).toFixed(3)
+          Math.random() * 2 - 1
         )
       )
     };

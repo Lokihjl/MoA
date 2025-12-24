@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 # 导入数据库模型
-from ..models import db, MLModel, KlineData, StockBasic
+from models import db, MLModel, KlineData, StockBasic
 
 # 创建蓝图
 ml_strategy_bp = Blueprint('ml_strategy', __name__)

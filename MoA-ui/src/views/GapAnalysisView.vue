@@ -196,7 +196,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
-import axios from 'axios'
+import { apiService } from '../services/api'
 
 // 查询参数
 const queryParams = ref({
@@ -292,19 +292,7 @@ const getSortIcon = (key: string) => {
 const symbolSearchText = ref('')
 
 // 股票名称映射表
-const stockNameMap = ref<Record<string, string>>({
-  'sh600000': '浦发银行',
-  'sh600036': '招商银行',
-  'sh600519': '贵州茅台',
-  'sh601398': '工商银行',
-  'sh601857': '中国石油',
-  'sh601118': '海南橡胶',
-  'sz000001': '平安银行',
-  'sz000002': '万科A',
-  'sz000858': '五粮液',
-  'sz002415': '海康威视',
-  'sz300750': '宁德时代'
-})
+const stockNameMap = ref<Record<string, string>>({})
 
 // 过滤后的股票列表
 const filteredSymbols = computed(() => {
@@ -400,8 +388,13 @@ const initDateRange = () => {
 // 获取已下载的股票列表
 const fetchSymbolsList = async () => {
   try {
-    const response = await axios.get('/api/moA/data/download/symbols')
-    symbolsList.value = response.data
+    const data = await apiService.get<any[]>('/data/download/symbols')
+    symbolsList.value = data
+    
+    // 动态构建股票名称映射表
+    data.forEach(item => {
+      stockNameMap.value[item.symbol] = item.name || item.symbol
+    })
   } catch (error) {
     console.error('获取已下载股票列表失败:', error)
     symbolsList.value = [
@@ -411,6 +404,11 @@ const fetchSymbolsList = async () => {
       { symbol: 'sz000001', market: 'cn' },
       { symbol: 'sz000858', market: 'cn' }
     ]
+    
+    // 为默认股票列表构建名称映射
+    symbolsList.value.forEach(item => {
+      stockNameMap.value[item.symbol] = item.name || item.symbol
+    })
   }
 }
 
@@ -448,25 +446,21 @@ const analyzeGaps = async () => {
   isAnalyzing.value = true
   
   try {
-    const response = await axios.get(`/api/moA/stock/${queryParams.value.symbol}/gaps`, {
-      params: {
-        start_date: queryParams.value.start_date,
-        end_date: queryParams.value.end_date,
-        threshold: queryParams.value.threshold
-      }
+    const response = await apiService.get(`/stock/${queryParams.value.symbol}/gaps`, {
+      start_date: queryParams.value.start_date,
+      end_date: queryParams.value.end_date,
+      threshold: queryParams.value.threshold
     })
     
-    gapData.value = response.data.gaps
+    gapData.value = response.gaps
     
-    const statsResponse = await axios.get(`/api/moA/stock/${queryParams.value.symbol}/gaps/stats`, {
-      params: {
-        start_date: queryParams.value.start_date,
-        end_date: queryParams.value.end_date,
-        threshold: queryParams.value.threshold
-      }
+    const statsResponse = await apiService.get(`/stock/${queryParams.value.symbol}/gaps/stats`, {
+      start_date: queryParams.value.start_date,
+      end_date: queryParams.value.end_date,
+      threshold: queryParams.value.threshold
     })
     
-    gapStats.value = statsResponse.data.stats
+    gapStats.value = statsResponse.stats
   } catch (error) {
     console.error('分析跳空缺口失败:', error)
     alert('分析失败，请检查网络连接或参数设置')

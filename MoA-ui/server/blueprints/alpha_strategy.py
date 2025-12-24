@@ -7,6 +7,9 @@ import numpy as np
 import pandas as pd
 import datetime
 
+# 导入数据库模型和db对象
+from models import KlineData, db
+
 # 将项目根目录添加到Python路径中，以便导入abupy模块
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
@@ -30,33 +33,74 @@ try:
 except Exception as e:
     print(f"启用示例数据失败: {e}")
 
-# 缓存股票数据，提高性能
-@lru_cache(maxsize=128)
-def get_symbol_data(symbol, start, end):
+# 获取所有股票列表
+def get_all_stocks():
     """
-    获取股票数据，带缓存
+    获取数据库中所有可用的股票代码
+    :return: 股票代码列表
     """
     try:
-        # 尝试使用ABuSymbolPd获取股票数据，不指定start和end，使用默认的n_folds参数
-        # 示例数据的时间范围是2011-07-28到2017-07-26
-        kl_pd = ABuSymbolPd.make_kl_df(symbol, n_folds=3)
+        from models import KlineData, db
         
-        # 如果获取不到数据，尝试使用内置示例股票代码
-        if kl_pd is None or kl_pd.empty:
-            print(f"尝试使用示例数据: {symbol}")
-            # 使用内置的示例股票代码
-            example_symbols = ['sz000002', 'sh600036', 'sh000001']
-            for example_symbol in example_symbols:
-                kl_pd = ABuSymbolPd.make_kl_df(example_symbol, n_folds=3)
-                if kl_pd is not None and not kl_pd.empty:
-                    print(f"成功使用示例数据: {example_symbol}")
-                    # 即使日期范围不匹配，也返回示例数据，后续在回测中处理
-                    return kl_pd
+        # 从数据库获取所有唯一的股票代码
+        stocks = KlineData.query.with_entities(KlineData.symbol).distinct().all()
         
-        # 即使日期范围不匹配，也返回数据，后续在回测中处理
-        return kl_pd
+        # 转换为列表
+        stock_list = [stock.symbol for stock in stocks]
+        
+        return stock_list
     except Exception as e:
-        print(f"获取股票数据失败: {e}")
+        print(f"Error getting all stocks: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+# 获取股票数据
+# @lru_cache(maxsize=128)
+def get_symbol_data(symbol, start_date, end_date):
+    """
+    获取股票历史数据
+    :param symbol: 股票代码
+    :param start_date: 开始日期
+    :param end_date: 结束日期
+    :return: 股票历史数据DataFrame
+    """
+    try:
+        from models import KlineData, db
+        
+        # 从数据库获取K线数据
+        kline_data = KlineData.query.filter(
+            KlineData.symbol == symbol,
+            KlineData.date >= start_date,
+            KlineData.date <= end_date,
+            KlineData.data_type == 'day'
+        ).order_by(KlineData.date).all()
+        
+        if not kline_data:
+            print(f"No data found for {symbol} from {start_date} to {end_date}")
+            return None
+        
+        # 转换为DataFrame
+        df = pd.DataFrame([{
+            'date': data.date,
+            'open': data.open,
+            'high': data.high,
+            'low': data.low,
+            'close': data.close,
+            'volume': data.volume
+        } for data in kline_data])
+        
+        # 设置日期索引
+        df.set_index('date', inplace=True)
+        
+        # 只保留需要的列
+        df = df[['open', 'high', 'low', 'close', 'volume']]
+        
+        print(f"Fetched real data for {symbol} from {start_date} to {end_date}")
+        print(f"Data shape: {df.shape}")
+        return df
+    except Exception as e:
+        print(f"Error getting symbol data from SQLite: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -175,6 +219,8 @@ def get_stock_pool():
         traceback.print_exc()
         return jsonify({"success": False, "message": f"获取股票池列表失败: {str(e)}"}), 500
 
+
+
 # 运行Alpha策略回测
 @moA_bp.route('/alpha/backtest', methods=['POST'])
 def run_backtest():
@@ -184,20 +230,44 @@ def run_backtest():
     try:
         # 获取请求参数
         data = request.get_json()
+        print(f"收到回测请求参数: {data}")
         stock_pool_id = data.get('stockPool', 'hs300')
         buy_alpha_ids = data.get('buyAlphaFactors', [])
         sell_alpha_ids = data.get('sellAlphaFactors', [])
-        start_date = data.get('startDate', '2020-01-01')
-        end_date = data.get('endDate', '2023-12-31')
+        requested_start_date = data.get('startDate', '2020-01-01')
+        requested_end_date = data.get('endDate', '2023-12-31')
         capital = data.get('capital', 1000000)
         n_folds = data.get('nFolds', 2)
+        # 获取股票代码，默认为sz000001
+        symbol = data.get('symbol', 'sz000001')
         
-        # 目前只支持单股票回测，后续可以扩展到股票池
-        # 这里使用腾讯股票作为示例
-        symbol = 'sz000001'
+        # 从数据库获取实际的日期范围
+        
+        # 获取股票数据的实际日期范围
+        date_range = KlineData.query.with_entities(
+            db.func.min(KlineData.date).label('min_date'),
+            db.func.max(KlineData.date).label('max_date')
+        ).filter_by(symbol=symbol).first()
+        
+        if date_range:
+            actual_start_date = date_range.min_date.strftime('%Y-%m-%d')
+            actual_end_date = date_range.max_date.strftime('%Y-%m-%d')
+            print(f"股票{symbol}的实际日期范围: {actual_start_date} 到 {actual_end_date}")
+            
+            # 使用实际的日期范围，但不超过请求的范围
+            start_date = max(requested_start_date, actual_start_date)
+            end_date = min(requested_end_date, actual_end_date)
+            
+            print(f"使用的日期范围: {start_date} 到 {end_date}")
+        else:
+            # 如果没有数据，使用默认范围
+            start_date = requested_start_date
+            end_date = requested_end_date
         
         # 使用缓存函数获取股票数据
         kl_pd = get_symbol_data(symbol, start_date, end_date)
+        
+        print(f"股票数据获取结果: kl_pd={kl_pd}")
         
         if kl_pd is None or kl_pd.empty:
             return jsonify({
