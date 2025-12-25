@@ -268,6 +268,46 @@
             <h4>回撤曲线</h4>
             <div class="chart-container" ref="drawdownChartRef"></div>
           </div>
+          
+          <div class="trading-records-section">
+            <h4>交易记录</h4>
+            <div class="trading-records-table-container">
+              <table class="trading-records-table">
+                <thead>
+                  <tr>
+                    <th>交易ID</th>
+                    <th>股票代码</th>
+                    <th>买入日期</th>
+                    <th>卖出日期</th>
+                    <th>买入价格</th>
+                    <th>卖出价格</th>
+                    <th>成交数量</th>
+                    <th>盈利金额</th>
+                    <th>持仓天数</th>
+                    <th>收益率</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="record in store.tradeRecords" :key="record.id">
+                    <td>{{ record.id }}</td>
+                    <td>{{ record.symbol }}</td>
+                    <td>{{ record.buy_date }}</td>
+                    <td>{{ record.sell_date }}</td>
+                    <td>{{ record.buy_price }}</td>
+                    <td>{{ record.sell_price }}</td>
+                    <td>{{ record.quantity }}</td>
+                    <td :class="record.profit >= 0 ? 'profit': 'loss'">
+                      {{ record.profit >= 0 ? '+' : '' }}{{ record.profit }}
+                    </td>
+                    <td>{{ record.hold_days }}</td>
+                    <td :class="record.profit_rate >= 0 ? 'profit' : 'loss'">
+                      {{ record.profit_rate >= 0 ? '+' : '' }}{{ record.profit_rate }}%
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
         
         <div v-else class="empty-results">
@@ -279,7 +319,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useAlphaStrategyStore } from '../stores/alphaStrategy'
 import { apiService } from '../services/api'
 import * as echarts from 'echarts'
@@ -519,171 +559,244 @@ const initCharts = () => {
 
 // 更新价格走势图表
 const updatePriceChart = () => {
-  console.log('Updating price chart...')
-  console.log('Price chart instance:', priceChart.value)
-  console.log('Price chart data:', store.chartData?.price)
+  console.log('updatePriceChart called');
+  console.log('Price chart instance:', priceChart.value);
+  console.log('Chart data available:', store.chartData);
+  console.log('Price chart data:', store.chartData?.price);
   
-  if (!priceChart.value || !store.chartData?.price) {
-    console.log('Skipping price chart update - missing instance or data')
-    return
+  if (!priceChart.value) {
+    console.error('Price chart instance not found!');
+    return;
   }
   
-  const data = store.chartData.price.map((item: any) => [
-    item.date,
-    parseFloat(item.close)
-  ])
+  if (!store.chartData?.price) {
+    console.error('Price chart data not found!');
+    return;
+  }
   
-  console.log('Processed price data:', data)
+  console.log('Raw price data from store:', store.chartData.price);
   
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: (params: any) => {
-        const date = params[0].axisValue
-        const close = params[0].value
-        return `${date}<br/>收盘价: ${close.toFixed(2)}`
-      }
-    },
-    xAxis: {
-      type: 'time',
-      axisLabel: {
-        formatter: '{MM}/{dd}'
-      }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: {
-        formatter: '{value}'
-      }
-    },
-    series: [
-      {
-        name: '收盘价',
-        type: 'line',
-        data: data,
-        smooth: true,
-        lineStyle: {
-          width: 2,
-          color: '#409eff'
+  try {
+    const data = store.chartData.price.map((item: any) => {
+      console.log('Processing price item:', item);
+      return [
+        new Date(item.date).getTime(), // 确保日期是时间戳
+        parseFloat(item.close)
+      ];
+    });
+    
+    console.log('Processed price data:', data);
+    
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross',
+          label: {
+            backgroundColor: '#6a7985'
+          }
         },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
-            { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }
-          ])
+        formatter: (params: any) => {
+          const date = new Date(params[0].axisValue).toLocaleDateString();
+          const close = params[0].value;
+          return `${date}<br/>收盘价: ${close.toFixed(2)}`;
         }
-      }
-    ]
+      },
+      xAxis: {
+        type: 'time',
+        axisLabel: {
+          formatter: '{MM}/{dd}'
+        }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          formatter: '{value}'
+        }
+      },
+      series: [
+        {
+          name: '收盘价',
+          type: 'line',
+          data: data,
+          smooth: true,
+          lineStyle: {
+            width: 2,
+            color: '#409eff'
+          },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
+              { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }
+            ])
+          }
+        }
+      ]
+    };
+    
+    console.log('Price chart option:', option);
+    priceChart.value.setOption(option);
+    console.log('Price chart updated successfully');
+  } catch (error) {
+    console.error('Error updating price chart:', error);
   }
-  
-  console.log('Price chart option:', option)
-  priceChart.value.setOption(option)
 }
 
 // 更新收益率曲线图表
 const updateReturnChart = () => {
-  if (!returnChart.value || !store.chartData?.cumReturn) return
+  console.log('updateReturnChart called');
   
-  const data = store.chartData.cumReturn.map((item: any) => [
-    item.date,
-    parseFloat(item.return)
-  ])
-  
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: (params: any) => {
-        const date = params[0].axisValue
-        const returnValue = params[0].value
-        return `${date}<br/>累计收益率: ${returnValue.toFixed(2)}%`
-      }
-    },
-    xAxis: {
-      type: 'time',
-      axisLabel: {
-        formatter: '{MM}/{dd}'
-      }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: {
-        formatter: '{value}%'
-      }
-    },
-    series: [
-      {
-        name: '累计收益率',
-        type: 'line',
-        data: data,
-        smooth: true,
-        lineStyle: {
-          width: 2,
-          color: '#67c23a'
-        },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(103, 194, 58, 0.3)' },
-            { offset: 1, color: 'rgba(103, 194, 58, 0.05)' }
-          ])
-        }
-      }
-    ]
+  if (!returnChart.value) {
+    console.error('Return chart instance not found!');
+    return;
   }
   
-  returnChart.value.setOption(option)
+  if (!store.chartData) {
+    console.error('Chart data not found!');
+    return;
+  }
+  
+  if (!store.chartData.cumReturn) {
+    console.error('Return chart data not found!');
+    return;
+  }
+  
+  try {
+    const data = store.chartData.cumReturn.map((item: any) => [
+      new Date(item.date).getTime(), // 确保日期是时间戳
+      parseFloat(item.return)
+    ]);
+    
+    console.log('Processed return data:', data);
+    
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross',
+          label: {
+            backgroundColor: '#6a7985'
+          }
+        },
+        formatter: (params: any) => {
+          const date = new Date(params[0].axisValue).toLocaleDateString();
+          const returnValue = params[0].value;
+          return `${date}<br/>累计收益率: ${returnValue.toFixed(2)}%`;
+        }
+      },
+      xAxis: {
+        type: 'time',
+        axisLabel: {
+          formatter: '{MM}/{dd}'
+        }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          formatter: (value: number) => `${value}%`  // 使用自定义格式化函数，直接添加%符号而不乘以100
+        }
+      },
+      series: [
+        {
+          name: '累计收益率',
+          type: 'line',
+          data: data,
+          smooth: true,
+          lineStyle: {
+            width: 2,
+            color: '#67c23a'
+          },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(103, 194, 58, 0.3)' },
+              { offset: 1, color: 'rgba(103, 194, 58, 0.05)' }
+            ])
+          }
+        }
+      ]
+    };
+    
+    returnChart.value.setOption(option);
+    console.log('Return chart updated successfully');
+  } catch (error) {
+    console.error('Error updating return chart:', error);
+  }
 }
 
 // 更新回撤曲线图表
 const updateDrawdownChart = () => {
-  if (!drawdownChart.value || !store.chartData?.drawdown) return
+  console.log('updateDrawdownChart called');
   
-  const data = store.chartData.drawdown.map((item: any) => [
-    item.date,
-    parseFloat(item.drawdown)
-  ])
-  
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: (params: any) => {
-        const date = params[0].axisValue
-        const drawdownValue = params[0].value
-        return `${date}<br/>回撤率: ${drawdownValue.toFixed(2)}%`
-      }
-    },
-    xAxis: {
-      type: 'time',
-      axisLabel: {
-        formatter: '{MM}/{dd}'
-      }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: {
-        formatter: '{value}%'
-      }
-    },
-    series: [
-      {
-        name: '回撤率',
-        type: 'line',
-        data: data,
-        smooth: true,
-        lineStyle: {
-          width: 2,
-          color: '#f56c6c'
-        },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(245, 108, 108, 0.3)' },
-            { offset: 1, color: 'rgba(245, 108, 108, 0.05)' }
-          ])
-        }
-      }
-    ]
+  if (!drawdownChart.value) {
+    console.error('Drawdown chart instance not found!');
+    return;
   }
   
-  drawdownChart.value.setOption(option)
+  if (!store.chartData?.drawdown) {
+    console.error('Drawdown chart data not found!');
+    return;
+  }
+  
+  try {
+    const data = store.chartData.drawdown.map((item: any) => [
+      new Date(item.date).getTime(), // 确保日期是时间戳
+      parseFloat(item.drawdown)
+    ]);
+    
+    console.log('Processed drawdown data:', data);
+    
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross',
+          label: {
+            backgroundColor: '#6a7985'
+          }
+        },
+        formatter: (params: any) => {
+          const date = new Date(params[0].axisValue).toLocaleDateString();
+          const drawdownValue = params[0].value;
+          return `${date}<br/>回撤率: ${drawdownValue.toFixed(2)}%`;
+        }
+      },
+      xAxis: {
+        type: 'time',
+        axisLabel: {
+          formatter: '{MM}/{dd}'
+        }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          formatter: (value: number) => `${value}%`
+        }
+      },
+      series: [
+        {
+          name: '回撤率',
+          type: 'line',
+          data: data,
+          smooth: true,
+          lineStyle: {
+            width: 2,
+            color: '#f56c6c'
+          },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(245, 108, 108, 0.3)' },
+              { offset: 1, color: 'rgba(245, 108, 108, 0.05)' }
+            ])
+          }
+        }
+      ]
+    };
+    
+    drawdownChart.value.setOption(option);
+    console.log('Drawdown chart updated successfully');
+  } catch (error) {
+    console.error('Error updating drawdown chart:', error);
+  }
 }
 
 // 执行策略
@@ -694,25 +807,56 @@ const runStrategy = () => {
 // 监听策略执行结果变化，更新图表
 watch(
   () => store.result,
-  (newResult) => {
+  async (newResult) => {
     console.log('Store result changed:', newResult)
     console.log('Chart data available:', store.chartData)
     
     if (newResult && store.chartData) {
       console.log('Updating charts...')
-      console.log('Price data:', store.chartData.price)
-      console.log('Return data:', store.chartData.cumReturn)
-      console.log('Drawdown data:', store.chartData.drawdown)
+      console.log('Price data length:', store.chartData.price?.length)
+      console.log('Return data length:', store.chartData.cumReturn?.length)
+      console.log('Drawdown data length:', store.chartData.drawdown?.length)
+      
+      // 等待DOM更新完成，确保图表容器已渲染
+      await nextTick()
+      console.log('DOM updated, checking chart refs...')
+      console.log('Price chart ref after nextTick:', priceChartRef.value)
+      console.log('Return chart ref after nextTick:', returnChartRef.value)
+      console.log('Drawdown chart ref after nextTick:', drawdownChartRef.value)
       
       // 确保图表实例已初始化
       if (!priceChart.value || !returnChart.value || !drawdownChart.value) {
         console.log('Charts not initialized, initializing now...')
         initCharts()
+        // 再次等待DOM更新
+        await nextTick()
+        console.log('After init, chart instances:', {
+          priceChart: priceChart.value,
+          returnChart: returnChart.value,
+          drawdownChart: drawdownChart.value
+        })
       }
       
-      updatePriceChart()
-      updateReturnChart()
-      updateDrawdownChart()
+      // 更新图表前检查数据是否存在
+      if (store.chartData.price) {
+        updatePriceChart()
+      } else {
+        console.error('Price data not found in chartData')
+      }
+      
+      if (store.chartData.cumReturn) {
+        updateReturnChart()
+      } else {
+        console.error('Return data not found in chartData')
+      }
+      
+      if (store.chartData.drawdown) {
+        updateDrawdownChart()
+      } else {
+        console.error('Drawdown data not found in chartData')
+      }
+    } else {
+      console.log('No result or chart data available, skipping chart update')
     }
   },
   { deep: true }
@@ -831,6 +975,57 @@ onUnmounted(() => {
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   background-color: #ffffff;
+}
+
+/* 交易记录样式 */
+.trading-records-section {
+  margin-top: 2rem;
+}
+
+.trading-records-table-container {
+  max-height: 500px;
+  overflow-y: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 10px;
+}
+
+.trading-records-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #ffffff;
+}
+
+.trading-records-table th {
+  background-color: #f8f9fa;
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #e9ecef;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.trading-records-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e9ecef;
+  color: #555;
+}
+
+.trading-records-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+.trading-records-table .profit {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.trading-records-table .loss {
+  color: #28a745;
+  font-weight: 500;
 }
 .alpha-strategy-container {
   width: 100%;

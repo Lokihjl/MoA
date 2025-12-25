@@ -66,7 +66,9 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
     error: '',
     result: null as any,
     // 图表数据
-    chartData: null as any
+    chartData: null as any,
+    // 交易记录
+    tradeRecords: [] as any[]
   }),
   
   actions: {
@@ -146,6 +148,7 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
       this.error = ''
       this.result = null
       this.chartData = null
+      this.tradeRecords = []
     },
     
 
@@ -188,6 +191,7 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
         if (result.success) {
           this.result = result.data.backtestResult
           this.chartData = result.data.chartData
+          this.tradeRecords = result.data.tradeRecords || []
         } else {
           this.error = result.message || '策略执行失败'
         }
@@ -197,6 +201,7 @@ export const useAlphaStrategyStore = defineStore('alphaStrategy', {
         this.error = err.message || '策略执行失败'
         this.result = null
         this.chartData = null
+        this.tradeRecords = []
       } finally {
         this.isRunning = false
       }
