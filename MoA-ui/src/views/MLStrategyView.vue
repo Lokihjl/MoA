@@ -219,6 +219,13 @@
             </div>
           </div>
         </div>
+        <div v-else-if="selectedStocks.length === 0 && !pickingStocks" class="stock-results empty">
+          <h3>选股结果</h3>
+          <div class="empty-state">
+            <p>没有选出符合条件的股票</p>
+            <p class="hint">建议调整选股参数或选择其他模型</p>
+          </div>
+        </div>
       </div>
       
       <!-- 动态止盈止损 -->
@@ -534,7 +541,7 @@ const showMessage = (text: string, type: 'success' | 'error' | 'info' = 'info') 
   message.value = { text, type };
   setTimeout(() => {
     message.value = null;
-  }, 3000);
+  }, 5000);
 };
 
 // 获取可用模型列表
@@ -554,8 +561,8 @@ const fetchAvailableModels = async () => {
 const createModel = async () => {
   creatingModel.value = true;
   try {
-    const response = await axios.post(`${API_BASE_URL}/ml_strategy/create_model`, modelForm.value);
-    if (response.data.success) {
+    const response = await apiService.post('/ml_strategy/create_model', modelForm.value);
+    if (response.success) {
       showMessage('模型创建成功', 'success');
       await fetchAvailableModels();
       // 清空模型名称输入框
@@ -572,12 +579,12 @@ const createModel = async () => {
 // 删除模型
 const deleteModel = async (modelId: string) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/ml_strategy/delete_model`, { model_id: modelId });
-    if (response.data.success) {
+    const response = await apiService.post('/ml_strategy/delete_model', { model_id: modelId });
+    if (response.success) {
       showMessage('模型删除成功', 'success');
       await fetchAvailableModels();
     } else {
-      showMessage(`模型删除失败: ${response.data.message}`, 'error');
+      showMessage(`模型删除失败: ${response.message}`, 'error');
     }
   } catch (error) {
     console.error('删除模型失败:', error);
@@ -597,18 +604,18 @@ const trainModel = async () => {
   trainInfo.value = null;
   
   try {
-    const response = await axios.post(`${API_BASE_URL}/ml_strategy/train_model`, trainForm.value);
-    if (response.data.success) {
+    const response = await apiService.post('/ml_strategy/train_model', trainForm.value);
+    if (response.success) {
       showMessage('模型训练成功', 'success');
       // 保存训练信息
-      if (response.data.train_info) {
-        trainInfo.value = response.data.train_info;
+      if (response.train_info) {
+        trainInfo.value = response.train_info;
       }
     } else {
-      showMessage(`模型训练失败: ${response.data.message}`, 'error');
+      showMessage(`模型训练失败: ${response.message}`, 'error');
       // 保存训练信息（即使失败）
-      if (response.data.train_info) {
-        trainInfo.value = response.data.train_info;
+      if (response.train_info) {
+        trainInfo.value = response.train_info;
       }
     }
   } catch (error) {
@@ -628,15 +635,20 @@ const pickStocks = async () => {
   
   pickingStocks.value = true;
   try {
-    const response = await axios.post(`${API_BASE_URL}/ml_strategy/smart_pick`, {
+    // 处理股票代码，为空时发送空列表
+    const symbols = pickForm.value.symbols.trim() 
+      ? pickForm.value.symbols.split(',').map(s => s.trim()) 
+      : [];
+      
+    const response = await apiService.post('/ml_strategy/smart_pick', {
       ...pickForm.value,
-      symbols: pickForm.value.symbols.split(',').map(s => s.trim())
+      symbols
     });
-    if (response.data.success) {
-      selectedStocks.value = response.data.selected_stocks;
+    if (response.success) {
+      selectedStocks.value = response.selected_stocks;
       showMessage('智能选股成功', 'success');
     } else {
-      showMessage(`智能选股失败: ${response.data.message}`, 'error');
+      showMessage(`智能选股失败: ${response.message}`, 'error');
     }
   } catch (error) {
     console.error('智能选股失败:', error);
@@ -655,12 +667,12 @@ const adjustStopParams = async () => {
   
   adjustingParams.value = true;
   try {
-    const response = await axios.post(`${API_BASE_URL}/ml_strategy/adjust_stop_params`, stopForm.value);
-    if (response.data.success) {
-      adjustedParams.value = response.data.adjusted_params;
+    const response = await apiService.post('/ml_strategy/adjust_stop_params', stopForm.value);
+    if (response.success) {
+      adjustedParams.value = response.adjusted_params;
       showMessage('止盈止损参数调整成功', 'success');
     } else {
-      showMessage(`止盈止损参数调整失败: ${response.data.message}`, 'error');
+      showMessage(`止盈止损参数调整失败: ${response.message}`, 'error');
     }
   } catch (error) {
     console.error('调整止盈止损参数失败:', error);
@@ -992,6 +1004,26 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 15px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  background: var(--card-background);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.empty-state p {
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.empty-state .hint {
+  font-size: 14px;
+  opacity: 0.8;
 }
 
 .stock-card {

@@ -43,7 +43,7 @@ def create_data_download():
         def save_kl_data_to_db(kl_df, symbol, market, data_type):
             """将ABU系统返回的K线数据保存到SQLite数据库"""
             from datetime import datetime
-            from ..models import db, KlineData, StockBasic
+            from models import KlineData, StockBasic
             import requests
             
             # 确保股票名称已存储到数据库
@@ -532,7 +532,7 @@ def create_data_download():
             with app.app_context():
                 try:
                     # 在后台线程中使用新的数据库会话
-                    from ..models import db, DataDownloadRecord
+                    from models import db, DataDownloadRecord
                     
                     # 创建新的数据库会话
                     db.session.rollback()

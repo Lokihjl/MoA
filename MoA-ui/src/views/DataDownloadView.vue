@@ -214,13 +214,32 @@ const getStatusText = (status: string): string => {
   return statusMap[status] || status
 }
 
+// 计算默认日期范围的函数
+const getDefaultDateRange = () => {
+  const now = new Date()
+  const twoYearsAgo = new Date()
+  twoYearsAgo.setFullYear(now.getFullYear() - 2)
+  
+  // 格式化日期为 YYYY-MM-DD
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  
+  return {
+    startDate: formatDate(twoYearsAgo),
+    endDate: formatDate(now)
+  }
+}
+
 // 下载参数
 const downloadParams = ref<DownloadParams>({
   market: 'cn',
   timeMode: 'years',
   years: 2,
-  startDate: '2021-12-19',
-  endDate: '2025-12-19',
+  ...getDefaultDateRange(),
   dataSource: 'tx',
   symbols: []
 })
