@@ -56,10 +56,22 @@ def get_single_linear_fit():
         # 进行线性/多项式拟合
         if poly == 1:
             # 线性拟合
-            slope, intercept, r2, predicted, metrics_result = regress_xy(x, y, mode=True, zoom=False, show=False)
+            model, predicted = regress_xy(x, y, mode=True, zoom=False, show=False)
+            # 从模型中提取参数
+            intercept = model.params[0]
+            slope = model.params[1]
+            r2 = model.rsquared
+            # 计算评估指标
+            metrics_result = metrics_func(y, predicted, show=False)
         else:
             # 多项式拟合
-            slope, intercept, r2, predicted, metrics_result = regress_xy_polynomial(x, y, poly=poly, zoom=False, show=False)
+            predicted = regress_xy_polynomial(x, y, poly=poly, zoom=False, show=False)
+            # 多项式拟合无法直接获得slope和intercept，这里设为None
+            slope = None
+            intercept = None
+            r2 = None
+            # 计算评估指标
+            metrics_result = metrics_func(y, predicted, show=False)
         
         # 计算拟合直线角度
         deg = calc_regress_deg(y)
@@ -72,9 +84,9 @@ def get_single_linear_fit():
             'symbol': symbol,
             'poly': poly,
             'metric': metric,
-            'slope': float(slope),
-            'intercept': float(intercept),
-            'r2': float(r2),
+            'slope': float(slope) if slope is not None else None,
+            'intercept': float(intercept) if intercept is not None else None,
+            'r2': float(r2) if r2 is not None else None,
             'metrics_value': float(metrics_result),
             'deg': float(deg),
             'is_valid': bool(is_valid),
@@ -192,10 +204,22 @@ def get_linear_fit_compare():
                 # 进行拟合
                 if poly == 1:
                     # 线性拟合
-                    slope, intercept, r2, predicted, metrics_result = regress_xy(x, y, mode=True, zoom=False, show=False)
+                    model, predicted = regress_xy(x, y, mode=True, zoom=False, show=False)
+                    # 从模型中提取参数
+                    intercept = model.params[0]
+                    slope = model.params[1]
+                    r2 = model.rsquared
+                    # 计算评估指标
+                    metrics_result = metrics_func(y, predicted, show=False)
                 else:
                     # 多项式拟合
-                    slope, intercept, r2, predicted, metrics_result = regress_xy_polynomial(x, y, poly=poly, zoom=False, show=False)
+                    predicted = regress_xy_polynomial(x, y, poly=poly, zoom=False, show=False)
+                    # 多项式拟合无法直接获得slope和intercept，这里设为None
+                    slope = None
+                    intercept = None
+                    r2 = None
+                    # 计算评估指标
+                    metrics_result = metrics_func(y, predicted, show=False)
                 
                 # 计算拟合直线角度
                 deg = calc_regress_deg(y)
@@ -206,9 +230,9 @@ def get_linear_fit_compare():
                 # 组织单只股票结果
                 stock_result = {
                     'symbol': symbol,
-                    'slope': float(slope),
-                    'intercept': float(intercept),
-                    'r2': float(r2),
+                    'slope': float(slope) if slope is not None else None,
+                    'intercept': float(intercept) if intercept is not None else None,
+                    'r2': float(r2) if r2 is not None else None,
                     'metrics_value': float(metrics_result),
                     'deg': float(deg),
                     'is_valid': bool(is_valid),

@@ -21,5 +21,8 @@ class DataDownloadRecord(db.Model):
     total_symbols = db.Column(db.Integer, nullable=False, default=0)  # 处理的股票数量
     success_symbols = db.Column(db.Integer, nullable=False, default=0)  # 成功获取数据的股票数量
     
+    # 注意：time_mode、years、start_date、end_date 字段仅用于API参数传递，不存储到数据库
+    # 这些字段在创建记录时用于处理下载逻辑，但不会持久化到数据库表中
+    
     def __repr__(self):
         return f'<DataDownloadRecord {self.id} - {self.market} - {self.status}>'

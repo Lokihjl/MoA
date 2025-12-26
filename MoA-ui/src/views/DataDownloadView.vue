@@ -7,27 +7,32 @@
         <div class="form-grid">
           <div class="form-group">
             <label for="market">市场类型</label>
-            <select id="market" v-model="downloadParams.market">
+            <select id="market" v-model="downloadParams.market" class="form-select">
               <option value="cn">A股</option>
             </select>
           </div>
           <div class="form-group">
             <label for="timeMode">时间模式</label>
-            <select id="timeMode" v-model="downloadParams.timeMode">
-              <option value="years">按年数</option>
-              <option value="range">按日期范围</option>
+            <select id="timeMode" v-model="downloadParams.timeMode" class="form-select" @change="handleTimeModeChange">
+              <option value="years">按年下载</option>
+              <option value="range">按时间范围下载</option>
             </select>
           </div>
           <div class="form-group" v-if="downloadParams.timeMode === 'years'">
-            <label for="years">年数</label>
-            <input 
-              type="number" 
-              id="years" 
-              v-model.number="downloadParams.years"
-              min="1"
-              max="10"
-              placeholder="例如：2"
-            />
+            <label for="years">下载年数</label>
+            <div class="years-input-group">
+              <input 
+                type="number" 
+                id="years" 
+                v-model.number="downloadParams.years"
+                min="1"
+                max="10"
+                placeholder="例如：2"
+                class="form-input"
+              />
+              <span class="input-suffix">年</span>
+            </div>
+            <small class="form-help">建议下载1-3年数据，避免请求过多被限制</small>
           </div>
           <div class="form-group" v-if="downloadParams.timeMode === 'range'">
             <label for="startDate">开始日期</label>
@@ -35,6 +40,8 @@
               type="date" 
               id="startDate" 
               v-model="downloadParams.startDate"
+              class="form-input"
+              :max="downloadParams.endDate || new Date().toISOString().split('T')[0]"
             />
           </div>
           <div class="form-group" v-if="downloadParams.timeMode === 'range'">
@@ -43,24 +50,38 @@
               type="date" 
               id="endDate" 
               v-model="downloadParams.endDate"
+              class="form-input"
+              :min="downloadParams.startDate"
+              :max="new Date().toISOString().split('T')[0]"
             />
           </div>
           <div class="form-group">
             <label for="dataSource">数据源</label>
-            <select id="dataSource" v-model="downloadParams.dataSource">
-              <option value="tx">腾讯数据源</option>
-              <option value="bd">百度数据源</option>
-              <option value="nt">网易数据源</option>
+            <select id="dataSource" v-model="downloadParams.dataSource" class="form-select">
+              <option value="sina">新浪财经</option>
+              <option value="tx">腾讯财经</option>
             </select>
           </div>
           <div class="form-group full-width">
             <label for="symbols">股票代码（逗号分隔，留空则全市场）</label>
-            <input 
-              type="text" 
-              id="symbols" 
-              v-model="symbolsText"
-              placeholder="例如：sh600000,sz000001,sz300001，留空则全市场下载"
-            />
+            <div class="symbols-input-wrapper">
+              <input 
+                type="text" 
+                id="symbols" 
+                v-model="symbolsText"
+                placeholder="例如：sh600000,sz000001,sz300001，留空则全市场下载"
+                class="form-input"
+              />
+              <button 
+                type="button" 
+                class="btn btn-outline"
+                @click="clearSymbols"
+                title="清空股票代码"
+              >
+                ×
+              </button>
+            </div>
+            <small class="form-help">输入格式：sh600000,sz000001（sh=上海，sz=深圳）</small>
           </div>
         </div>
         <div class="buttons-group">
@@ -260,18 +281,49 @@ const symbolsArray = computed({
   set: (value) => downloadParams.value.symbols = value
 })
 
+// 清空股票代码
+const clearSymbols = () => {
+  symbolsText.value = ''
+}
+
+// 处理时间模式变化
+const handleTimeModeChange = () => {
+  if (downloadParams.value.timeMode === 'years') {
+    // 按年模式：使用默认的年数设置
+    downloadParams.value.years = 2
+  } else {
+    // 按时间范围模式：使用默认的日期范围
+    const defaultRange = getDefaultDateRange()
+    downloadParams.value.startDate = defaultRange.startDate
+    downloadParams.value.endDate = defaultRange.endDate
+  }
+}
+
 // 创建下载任务
 const createDownload = async () => {
   const symbolsArray = symbolsText.value.trim() 
     ? symbolsText.value.split(',').map(s => s.trim()).filter(s => s) 
     : []
   
+  // 构建符合后端接口的参数
+  const requestParams = {
+    market: downloadParams.value.market,
+    timeMode: downloadParams.value.timeMode,
+    dataSource: downloadParams.value.dataSource,
+    symbols: symbolsArray
+  }
+  
+  // 根据时间模式添加相应参数
+  if (downloadParams.value.timeMode === 'years') {
+    requestParams.years = downloadParams.value.years
+  } else {
+    requestParams.startDate = downloadParams.value.startDate
+    requestParams.endDate = downloadParams.value.endDate
+  }
+  
   isCreating.value = true
   try {
-    await apiService.post('/data/download', {
-      ...downloadParams.value,
-      symbols: symbolsArray
-    })
+    await apiService.post('/data/download', requestParams)
     fetchDownloadRecords()
     symbolsText.value = ''
     alert('下载任务创建成功，正在后台执行...')
@@ -487,6 +539,7 @@ onUnmounted(() => {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
+  transition: all 0.3s ease;
 }
 
 .form-group input:focus,
@@ -496,6 +549,77 @@ onUnmounted(() => {
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 
+.form-select {
+  background-color: white;
+  cursor: pointer;
+}
+
+.form-input {
+  transition: all 0.3s ease;
+}
+
+.form-input:hover {
+  border-color: #bbb;
+}
+
+.years-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.years-input-group .form-input {
+  flex: 1;
+  max-width: 120px;
+}
+
+.input-suffix {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.date-range-group {
+  width: 100%;
+}
+
+.date-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.date-input-wrapper .form-input {
+  flex: 1;
+}
+
+.date-separator {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.symbols-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.symbols-input-wrapper .form-input {
+  flex: 1;
+}
+
+.form-help {
+  font-size: 0.75rem;
+  color: #666;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
 .buttons-group {
   display: flex;
   gap: 1rem;
@@ -503,13 +627,18 @@ onUnmounted(() => {
 
 .btn-primary,
 .btn-secondary,
-.btn-sm {
+.btn-sm,
+.btn-outline {
   padding: 0.75rem 1.5rem;
   border: none;
   border-radius: 4px;
   font-size: 1rem;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .btn-primary {
@@ -529,6 +658,27 @@ onUnmounted(() => {
 .btn-sm {
   padding: 0.375rem 0.75rem;
   font-size: 0.875rem;
+}
+
+.btn-outline {
+  background-color: transparent;
+  border: 1px solid #ddd;
+  color: #666;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  min-width: 32px;
+  height: 36px;
+}
+
+.btn-outline:hover {
+  background-color: #f8f9fa;
+  border-color: #bbb;
+  color: #333;
+}
+
+.btn-outline:active {
+  background-color: #e9ecef;
+  transform: translateY(1px);
 }
 
 .btn-danger {

@@ -12,6 +12,7 @@ from abupy import ABuSymbolPd, AbuFactorBuyBase, AbuFactorSellBase
 from abupy import AbuKLManager
 import numpy as np
 import pandas as pd
+from datetime import datetime
 
 # 导入数据库模型
 from models import db, MLModel, KlineData, StockBasic
@@ -45,32 +46,53 @@ class MLModelWrapper:
         """
         初始化具体的机器学习模型
         """
-        if self.fit_type == 'clf':
-            if self.model_type == 'random_forest':
-                self.model = self.estimator.random_forest_classifier()
-            elif self.model_type == 'xgb':
-                self.model = self.estimator.xgb_classifier()
-            elif self.model_type == 'svc':
-                self.model = self.estimator.svc(probability=True)
-            elif self.model_type == 'knn':
-                self.model = self.estimator.knn_classifier()
-            elif self.model_type == 'decision_tree':
-                self.model = self.estimator.decision_tree_classifier()
+        try:
+            if self.fit_type == 'clf':
+                if self.model_type == 'random_forest':
+                    self.model = self.estimator.random_forest_classifier()
+                elif self.model_type == 'xgb':
+                    self.model = self.estimator.xgb_classifier()
+                elif self.model_type == 'svc':
+                    # 为SVC提供更好的默认参数，避免参数缺失错误
+                    self.model = self.estimator.svc(
+                        kernel='rbf', 
+                        C=1.0, 
+                        gamma='scale', 
+                        probability=True,
+                        random_state=42
+                    )
+                elif self.model_type == 'knn':
+                    # 为KNN提供更合理的默认参数
+                    self.model = self.estimator.knn_classifier(
+                        n_neighbors=5,  # 使用更合理的邻居数量
+                        weights='uniform',
+                        algorithm='auto'
+                    )
+                elif self.model_type == 'decision_tree':
+                    # 为决策树提供更合适的默认参数
+                    self.model = self.estimator.decision_tree_classifier(
+                        max_depth=10,  # 增加最大深度限制
+                        min_samples_split=5,  # 设置分割所需最小样本数
+                        min_samples_leaf=2,   # 设置叶节点最小样本数
+                        random_state=42
+                    )
+                else:
+                    raise ValueError(f"不支持的分类模型类型: {self.model_type}")
+            elif self.fit_type == 'reg':
+                if self.model_type == 'random_forest':
+                    self.model = self.estimator.random_forest_regressor()
+                elif self.model_type == 'xgb':
+                    self.model = self.estimator.xgb_regressor()
+                elif self.model_type == 'svr':
+                    self.model = self.estimator.svr()
+                elif self.model_type == 'linear':
+                    self.model = self.estimator.linear_regressor()
+                else:
+                    raise ValueError(f"不支持的回归模型类型: {self.model_type}")
             else:
-                raise ValueError(f"不支持的分类模型类型: {self.model_type}")
-        elif self.fit_type == 'reg':
-            if self.model_type == 'random_forest':
-                self.model = self.estimator.random_forest_regressor()
-            elif self.model_type == 'xgb':
-                self.model = self.estimator.xgb_regressor()
-            elif self.model_type == 'svr':
-                self.model = self.estimator.svr()
-            elif self.model_type == 'linear':
-                self.model = self.estimator.linear_regressor()
-            else:
-                raise ValueError(f"不支持的回归模型类型: {self.model_type}")
-        else:
-            raise ValueError(f"不支持的拟合类型: {self.fit_type}")
+                raise ValueError(f"不支持的拟合类型: {self.fit_type}")
+        except Exception as e:
+            raise Exception(f"初始化{self.model_type}模型失败: {str(e)}")
     
     def fit(self, x, y):
         """
@@ -463,45 +485,134 @@ class MLStrategyService:
             x_train = []
             y_train = []
             
-            # 处理缺失值，填充NaN
-            kl_pd = kl_pd.fillna(method='ffill').fillna(method='bfill')
+            # 更严格的数据预处理
             train_info['steps'].append({
                 'step': '数据预处理',
-                'message': '处理缺失值，填充NaN',
+                'message': '开始数据清洗和预处理',
                 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
             })
             
+            # 检查数据完整性
+            if kl_pd.shape[0] < lookback_days + 20:
+                raise ValueError(f"数据量不足：{kl_pd.shape[0]}条记录，需要至少{lookback_days + 20}条")
+            
+            # 处理缺失值，更全面的清洗
+            original_shape = kl_pd.shape
+            kl_pd = kl_pd.fillna(method='ffill').fillna(method='bfill')
+            
+            # 再次检查是否还有NaN值
+            if kl_pd.isnull().any().any():
+                # 如果还有NaN，用列的均值填充数值列
+                for col in kl_pd.select_dtypes(include=[np.number]).columns:
+                    kl_pd[col] = kl_pd[col].fillna(kl_pd[col].mean())
+                # 对于非数值列，用前向填充
+                for col in kl_pd.select_dtypes(exclude=[np.number]).columns:
+                    kl_pd[col] = kl_pd[col].fillna(method='ffill')
+            
+            train_info['steps'].append({
+                'step': '数据预处理',
+                'message': f'原始数据形状：{original_shape}，清洗后形状：{kl_pd.shape}',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
+            # 确保必要的列存在
+            required_cols = ['close', 'volume', 'high', 'low', 'open']
+            missing_cols = [col for col in required_cols if col not in kl_pd.columns]
+            if missing_cols:
+                raise ValueError(f"缺少必要的列：{missing_cols}")
+            
+            valid_samples = 0
             for i in range(lookback_days, kl_pd.shape[0] - 5):
-                # 生成特征，使用真实数据计算
-                features = []
-                for col in ['close', 'volume', 'high', 'low', 'open']:
-                    features.append(kl_pd[col].values[i-lookback_days:i])
-                
-                # 计算真实的收益率和波动率特征
-                returns = kl_pd['close'].pct_change().values[i-lookback_days:i]
-                volatility = kl_pd['close'].pct_change().rolling(window=5).std().values[i-lookback_days:i]
-                
-                # 处理特征中的NaN值，用0填充
-                returns = np.nan_to_num(returns, nan=0.0)
-                volatility = np.nan_to_num(volatility, nan=0.0)
-                
-                features.append(returns)
-                features.append(volatility)
-                
-                x_train.append(np.concatenate(features))
-                
-                # 生成真实标签：5天后是否上涨
-                future_return = kl_pd['close'].pct_change(periods=5).values[i]
-                # 处理标签中的NaN值
-                future_return = 0.0 if np.isnan(future_return) else future_return
-                y_train.append(1 if future_return > 0 else 0)
+                try:
+                    # 生成特征，使用真实数据计算
+                    features = []
+                    
+                    # 添加基础价格和成交量特征
+                    for col in required_cols:
+                        col_data = kl_pd[col].values[i-lookback_days:i]
+                        # 检查这一列是否有有效数据
+                        if len(col_data) == 0 or np.all(np.isnan(col_data)):
+                            continue
+                        # 用0替换NaN值
+                        col_data = np.nan_to_num(col_data, nan=0.0)
+                        features.append(col_data)
+                    
+                    # 计算收益率和波动率特征
+                    close_data = kl_pd['close'].values[i-lookback_days:i]
+                    if len(close_data) < 2:
+                        continue
+                    
+                    returns = np.diff(close_data) / close_data[:-1]
+                    if len(returns) > 0:
+                        returns = np.nan_to_num(returns, nan=0.0)
+                        features.append(returns)
+                    
+                    # 计算滚动波动率
+                    if len(close_data) >= 5:
+                        rolling_returns = np.diff(close_data) / close_data[:-1]
+                        volatility = pd.Series(rolling_returns).rolling(window=5).std().fillna(0).values
+                        volatility = np.nan_to_num(volatility, nan=0.0)
+                        features.append(volatility)
+                    
+                    # 检查特征完整性
+                    if len(features) == 0:
+                        continue
+                    
+                    # 合并所有特征
+                    feature_vector = np.concatenate([f.flatten() for f in features])
+                    
+                    # 检查特征向量的有效性
+                    if len(feature_vector) == 0 or np.all(np.isnan(feature_vector)):
+                        continue
+                    
+                    # 用0替换剩余的NaN值
+                    feature_vector = np.nan_to_num(feature_vector, nan=0.0)
+                    
+                    # 生成标签：5天后是否上涨
+                    if i + 5 >= len(kl_pd):
+                        continue
+                    
+                    current_price = kl_pd['close'].values[i]
+                    future_price = kl_pd['close'].values[i + 5]
+                    
+                    if np.isnan(current_price) or np.isnan(future_price):
+                        continue
+                    
+                    future_return = (future_price - current_price) / current_price
+                    label = 1 if future_return > 0 else 0
+                    
+                    x_train.append(feature_vector)
+                    y_train.append(label)
+                    valid_samples += 1
+                    
+                except Exception as e:
+                    print(f"处理第{i}个样本时出错: {e}")
+                    continue
             
             x_train = np.array(x_train)
             y_train = np.array(y_train)
             
+            # 检查训练数据有效性
+            if len(x_train) == 0:
+                raise ValueError("没有生成有效的训练样本，请检查数据质量和参数设置")
+            
+            if len(y_train) == 0:
+                raise ValueError("没有生成有效的标签数据，请检查数据质量和参数设置")
+            
+            # 数据标准化（对某些模型有帮助）
+            from sklearn.preprocessing import StandardScaler
+            scaler = StandardScaler()
+            x_train_scaled = scaler.fit_transform(x_train)
+            
             train_info['steps'].append({
                 'step': '训练数据生成',
-                'message': f'使用真实数据生成 {x_train.shape[0]} 个样本，每个样本包含 {x_train.shape[1]} 个特征',
+                'message': f'使用真实数据生成 {x_train.shape[0]} 个有效样本，每个样本包含 {x_train.shape[1]} 个特征',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            })
+            
+            train_info['steps'].append({
+                'step': '数据预处理',
+                'message': f'对特征进行标准化处理，特征均值：{np.mean(x_train_scaled):.4f}，标准差：{np.std(x_train_scaled):.4f}',
                 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
             })
             
@@ -510,9 +621,16 @@ class MLStrategyService:
             class_distribution = dict(zip(unique, counts))
             train_info['steps'].append({
                 'step': '数据统计',
-                'message': f'真实数据类别分布：上涨 {class_distribution.get(1, 0)} 个，下跌 {class_distribution.get(0, 0)} 个',
+                'message': f'类别分布：上涨 {class_distribution.get(1, 0)} 个，下跌 {class_distribution.get(0, 0)} 个，平衡比例：{class_distribution.get(1, 0)/(class_distribution.get(0, 0)+class_distribution.get(1, 0)):.2%}',
                 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
             })
+            
+            # 数据质量检查
+            if len(x_train) < 10:
+                raise ValueError(f"训练样本数量过少（{len(x_train)}个），至少需要10个样本")
+            
+            if len(np.unique(y_train)) < 2:
+                raise ValueError("标签数据只有一个类别，无法进行分类训练")
             
             # 训练模型
             train_info['steps'].append({
@@ -525,7 +643,25 @@ class MLStrategyService:
             train_start_time = time.time()
             
             # 使用真实数据训练模型
-            model_wrapper.fit(x_train, y_train)
+            try:
+                # 使用MLModelWrapper的初始化方法
+                model_wrapper = MLModelWrapper(model_type=model_wrapper.model_type, fit_type=model_wrapper.fit_type)
+                model = model_wrapper.model
+                train_info['steps'].append({
+                    'step': '模型初始化',
+                    'message': f'模型初始化成功，类型：{type(model).__name__}',
+                    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+                })
+                
+                # 使用标准化的数据进行训练
+                model.fit(x_train_scaled, y_train)
+                train_info['steps'].append({
+                    'step': '模型拟合',
+                    'message': f'{model_wrapper.model_type.upper()}模型训练完成',
+                    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+                })
+            except Exception as e:
+                raise ValueError(f"模型训练失败：{str(e)}")
             
             train_end_time = time.time()
             
@@ -545,11 +681,12 @@ class MLStrategyService:
                     'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
                 })
                 
-                serialized_model = MLModel().serialize_model(model_wrapper.model)
+                serialized_model = MLModel().serialize_model(model)
                 
                 # 更新数据库记录
                 ml_model.lookback_days = lookback_days
                 ml_model.model_data = serialized_model
+                ml_model.updated_at = datetime.now()
                 
                 db.session.commit()
                 

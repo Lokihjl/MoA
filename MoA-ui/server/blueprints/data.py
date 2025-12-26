@@ -23,6 +23,10 @@ def create_data_download():
         download_params = request.get_json()
         market = download_params.get('market', 'us')
         symbols = download_params.get('symbols', [])
+        time_mode = download_params.get('timeMode', 'years')  # 'years' 或 'dateRange'
+        years = download_params.get('years', 2)  # 按年下载时的年数
+        start_date = download_params.get('startDate')  # 按日期范围下载的开始日期
+        end_date = download_params.get('endDate')  # 按日期范围下载的结束日期
         
         # 将symbols转换为逗号分隔的字符串
         symbols_str = ','.join(symbols) if symbols else 'all'
@@ -33,6 +37,12 @@ def create_data_download():
             data_type='day',  # 目前只支持日线数据
             symbols=symbols_str
         )
+        
+        # 将时间模式相关参数存储到record对象中（不保存到数据库）
+        download_record._time_mode = time_mode  # 'years' 或 'dateRange'
+        download_record._years = years  # 按年下载时的年数
+        download_record._start_date = datetime.strptime(start_date, '%Y-%m-%d') if start_date else None  # 按日期范围下载的开始日期
+        download_record._end_date = datetime.strptime(end_date, '%Y-%m-%d') if end_date else None  # 按日期范围下载的结束日期
         db.session.add(download_record)
         db.session.commit()
         
@@ -267,7 +277,12 @@ def create_data_download():
                     try:
                         # 配置请求头，模拟浏览器访问
                         headers = {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+                            'Referer': 'https://finance.sina.com.cn/',
+                            'Accept': 'application/json, text/javascript, */*; q=0.01',
+                            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                            'Accept-Encoding': 'gzip, deflate, br',
+                            'Connection': 'keep-alive',
                         }
                         
                         # 获取上海A股
@@ -296,6 +311,13 @@ def create_data_download():
                             except Exception as e:
                                 print(f'存储股票{symbol}的名称到数据库时出错: {e}')
                                 continue
+                        
+                        # 提交上海A股数据
+                        db.session.commit()
+                        
+                        # 添加延迟，避免请求过快被限制
+                        import time
+                        time.sleep(2)  # 延迟2秒再请求深圳A股
                         
                         # 获取深圳A股
                         print(f'尝试获取深圳A股列表，第{retry+1}次...')
@@ -461,20 +483,41 @@ def create_data_download():
                     return []
         
         # 直接使用新浪财经API获取历史数据
-        def get_historical_data_from_sina(symbol, datalen=252):
+        def get_historical_data_from_sina(symbol, datalen=252, start_date=None, end_date=None):
             """
             从新浪财经API获取股票历史数据
             :param symbol: 股票代码，格式如sh600000
-            :param datalen: 获取的数据天数
+            :param datalen: 获取的数据天数（按年下载时使用）
+            :param start_date: 开始日期（按日期范围下载时使用）
+            :param end_date: 结束日期（按日期范围下载时使用）
             :return: 包含历史数据的DataFrame
             """
             try:
                 import requests
                 import pandas as pd
                 import json
+                from datetime import datetime, timedelta
                 
                 scale = 240  # 日K线
-                sina_url = f'http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={symbol}&scale={scale}&ma=no&datalen={datalen}'
+                
+                # 根据时间模式确定请求参数
+                if start_date and end_date:
+                    # 按日期范围下载
+                    print(f'按日期范围下载：{start_date} 到 {end_date}')
+                    
+                    # 计算需要获取的天数
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d') if isinstance(start_date, str) else start_date
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d') if isinstance(end_date, str) else end_date
+                    days_diff = (end_dt - start_dt).days + 1
+                    
+                    # 预留一些天数确保覆盖完整范围
+                    datalen = max(days_diff + 30, 365)  # 至少获取365天，最多获取范围+30天
+                    
+                    sina_url = f'http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={symbol}&scale={scale}&ma=no&datalen={datalen}'
+                else:
+                    # 按天数下载
+                    sina_url = f'http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={symbol}&scale={scale}&ma=no&datalen={datalen}'
+                
                 print(f'调用新浪财经API: {sina_url}')
                 
                 response = requests.get(sina_url, timeout=10)
@@ -497,6 +540,15 @@ def create_data_download():
                 kl_df = pd.DataFrame(sina_data)
                 kl_df['date'] = pd.to_datetime(kl_df['day'])
                 kl_df.set_index('date', inplace=True)
+                
+                # 如果指定了日期范围，进行过滤
+                if start_date and end_date:
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d') if isinstance(start_date, str) else start_date
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d') if isinstance(end_date, str) else end_date
+                    
+                    # 过滤指定日期范围内的数据
+                    kl_df = kl_df[(kl_df.index >= start_dt) & (kl_df.index <= end_dt)]
+                    print(f'日期范围过滤后数据长度: {len(kl_df)}')
                 
                 # 转换数据类型
                 numeric_cols = ['open', 'high', 'low', 'close', 'volume']
@@ -667,11 +719,17 @@ def create_data_download():
                                 KlineData.data_type == current_data_type
                             ).scalar()
                             
-                            # 如果有最新日期，获取该日期之后的数据，否则获取365天数据
+                            # 根据时间模式确定数据获取策略
                             if latest_date:
                                 print(f"{symbol}已存在数据，最新日期为{latest_date}，执行增量更新...")
-                                # 从新浪财经API获取数据
-                                kl_df = get_historical_data_from_sina(symbol, datalen=365)
+                                # 增量更新：根据当前记录的时间模式获取数据
+                                if current_record._time_mode == 'years':
+                                    # 按年模式：获取指定年数的完整数据
+                                    datalen = current_record._years * 365
+                                    kl_df = get_historical_data_from_sina(symbol, datalen=datalen)
+                                else:
+                                    # 按日期范围模式：获取指定日期范围的数据
+                                    kl_df = get_historical_data_from_sina(symbol, start_date=current_record._start_date, end_date=current_record._end_date)
                                 
                                 if kl_df is not None and not kl_df.empty:
                                     # 确保latest_date是datetime64类型，与kl_df.index类型匹配
@@ -682,8 +740,20 @@ def create_data_download():
                                     print(f"增量更新：过滤后有{len(kl_df)}条新数据")
                             else:
                                 print(f"{symbol}不存在数据，执行首次下载...")
-                                # 首次下载，获取365天数据
-                                kl_df = get_historical_data_from_sina(symbol, datalen=365)
+                                # 首次下载：根据时间模式获取数据
+                                if current_record._time_mode == 'years':
+                                    # 按年模式：获取指定年数的完整数据
+                                    datalen = current_record._years * 365
+                                    print(f"按年模式下载，获取{datalen}天数据")
+                                    kl_df = get_historical_data_from_sina(symbol, datalen=datalen)
+                                else:
+                                    # 按日期范围模式：获取指定日期范围的数据
+                                    print(f"按日期范围模式下载，从{current_record._start_date}到{current_record._end_date}")
+                                    kl_df = get_historical_data_from_sina(symbol, start_date=current_record._start_date, end_date=current_record._end_date)
+                            
+                            # 添加延迟，避免请求过快被限制
+                            import time
+                            time.sleep(0.5)  # 延迟0.5秒再请求下一只股票
                             
                             # 调试：打印K线数据信息
                             if kl_df is None:
